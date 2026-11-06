@@ -113,3 +113,63 @@ APT history should be considered supplementary evidence rather than a primary so
 - #2 Research package discovery methods on Debian and Ubuntu
 - #6 Investigate package state detection
 - #11 Research source classification heuristics
+
+## Additional Findings
+
+### Ubuntu Repository Packages
+
+Examples:
+
+```text
+git
+firefox
+vlc
+```
+
+Repository URLs observed:
+
+```text
+http://us.archive.ubuntu.com/ubuntu
+http://security.ubuntu.com/ubuntu
+```
+
+Classification:
+
+```text
+Repository Managed
+```
+
+Confidence:
+
+```text
+High
+```
+
+---
+
+### Local .deb Candidates
+
+Examples:
+
+```text
+discord-ptb
+clover-eye
+```
+
+Observed pattern:
+
+```text
+Only /var/lib/dpkg/status present
+```
+
+Classification:
+
+```text
+Local .deb Candidate
+```
+
+Confidence:
+
+```text
+Medium-High
+```
