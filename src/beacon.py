@@ -251,7 +251,7 @@ def installed_count():
         text=True,
     )
 
-    return result.stdout.strip()
+    return int(result.stdout.strip())
 
 
 def config_remains_count():
@@ -262,7 +262,7 @@ def config_remains_count():
         text=True,
     )
 
-    return result.stdout.strip()
+    return int(result.stdout.strip())
 
 
 def auto_installed_count():
@@ -273,7 +273,11 @@ def auto_installed_count():
         text=True,
     )
 
-    return result.stdout.strip()
+    return int(result.stdout.strip())
+
+
+def manual_installed_count():
+    return installed_count() - auto_installed_count()
 
 
 def scan_summary():
@@ -283,8 +287,9 @@ def scan_summary():
     print()
 
     print(f"Installed Packages : {installed_count()}")
-    print(f"Config Remains     : {config_remains_count()}")
+    print(f"Manual Installed   : {manual_installed_count()}")
     print(f"Auto Installed     : {auto_installed_count()}")
+    print(f"Config Remains     : {config_remains_count()}")
     print()
 
     print(f"Repository Files   : {repository_file_count()}")
