@@ -28,12 +28,14 @@ def help_menu():
     print("    --help       Show this help menu.")
     print("    --version    Show Beacon version.")
     print("    --scan       Show system summary.")
+    print("    --repos      Show repository inventory.")
     print()
     print("Examples:")
     print("    beacon.py floorp")
     print("    beacon.py steam")
     print("    beacon.py clovereye")
     print("    beacon.py --scan")
+    print("    beacon.py --repos")
 
 
 def state_icon(state):
@@ -313,6 +315,15 @@ def scan_summary():
     for repo in repository_names():
         print(f"  - {repo}")
 
+    def repository_summary():
+        print_banner()
+
+        print("Repository Inventory")
+        print()
+
+        for repo in repository_names():
+            print(f"  - {repo}")
+
 # =================================
 # MAIN
 # =================================
@@ -333,6 +344,10 @@ def main():
 
     if sys.argv[1] == "--scan":
         scan_summary()
+        sys.exit(0)
+
+    if sys.argv[1] == "--repos":
+        repository_summary()
         sys.exit(0)
 
     package = sys.argv[1]
