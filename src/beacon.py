@@ -41,15 +41,39 @@ def package_state(package):
     if f"rc  {package}" in output:
         return "Config Remains"
 
+    if package_exists(package):
+        return "Available"
+
     return "Unknown"
+
+def package_exists(package):
+    result = subprocess.run(
+        ["apt-cache", "policy", package],
+        capture_output=True,
+        text=True,
+    )
+
+    output = result.stdout
+    error = result.stderr
+
+    if "Unable to locate package" in error:
+        return False
+
+    if "Candidate:" in output:
+        return True
+
+    return False    
 
 def state_icon(state):
     icons = {
         "Installed": "✓",
         "Config Remains": "!",
+        "Available": "↓",
         "Unknown": "?",
     }
+
     return icons.get(state, "?")
+
 
 def main():
     if len(sys.argv) != 2:
