@@ -64,14 +64,10 @@ def package_exists(package):
         text=True,
     )
 
-    output = result.stdout
-    error = result.stderr
-
-    if "Unable to locate package" in error:
-        return False
-
-    if "Candidate:" in output:
-        return True
+    for line in (result.stdout or "").splitlines():
+        if line.strip().lower().startswith("candidate:"):
+            candidate = line.split(":", 1)[1].strip()
+            return candidate != "(none)"
 
     return False
 
@@ -83,13 +79,29 @@ def package_state(package):
         text=True,
     )
 
-    output = result.stdout
+    requested_name, separator, requested_arch = package.partition(":")
 
-    if f"ii  {package}" in output:
-        return "Installed"
+    for line in (result.stdout or "").splitlines():
+        parts = line.split()
 
-    if f"rc  {package}" in output:
-        return "Config Remains"
+        if len(parts) < 2:
+            continue
+
+        installed_name, arch_separator, installed_arch = parts[1].partition(":")
+
+        if installed_name != requested_name:
+            continue
+
+        if separator and (
+            not arch_separator or installed_arch != requested_arch
+        ):
+            continue
+
+        if parts[0] == "ii":
+            return "Installed"
+
+        if parts[0] == "rc":
+            return "Config Remains"
 
     if package_exists(package):
         return "Available"
