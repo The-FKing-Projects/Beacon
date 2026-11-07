@@ -8,10 +8,11 @@ from upstream sources.
 
 - Package inspection
 - Package version detection
-- Package source detection
-- System inventory scanning
-- Repository inventory reporting
-- Repository classification
+- Package source detection with confidence evidence
+- System inventory scanning (`--scan`)
+- Repository inventory (`--repos`)
+- Configuration-remains inventory (`--clean`)
+- Local package inventory (`--local`)
 
 ## Goals
 
@@ -35,8 +36,7 @@ from upstream sources.
 
 ### v0.1.3
 
-- Local package detection (`--local`)
-- Detect packages installed outside repository management
+- Refine provenance confidence scoring with real-world package test cases
 
 ### v0.2
 

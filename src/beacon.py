@@ -5,6 +5,7 @@ VERSION = "0.1.2"
 import os
 import subprocess
 import sys
+from urllib.parse import urlparse
 
 
 # =================================
@@ -112,60 +113,145 @@ def is_local_candidate(package):
         if installed_package == package:
             return True
 
-    policy = subprocess.run(
-        ["apt-cache", "policy", package],
-        capture_output=True,
-        text=True,
-    )
-
-    policy_output = (policy.stdout or "").lower()
-
-    installed_line = any(
-        "installed:" in line.lower() for line in (policy.stdout or "").splitlines()
-    )
-
-    candidate_line = "candidate:" in policy_output
-
-    return installed_line and not candidate_line
+    return False
 
 
-def package_source(package):
+def _policy_origins_for_version(output, selected_version):
+    origins = []
+    current_version = None
+    in_version_table = False
+
+    for line in output.splitlines():
+        stripped = line.strip()
+
+        if stripped.lower().startswith("version table:"):
+            in_version_table = True
+            continue
+
+        if not in_version_table:
+            continue
+
+        version_line = stripped[3:].strip() if stripped.startswith("***") else stripped
+        parts = version_line.split()
+
+        if len(parts) >= 2 and parts[1].isdigit():
+            current_version = parts[0]
+            continue
+
+        if current_version == selected_version and (
+            "://" in stripped or "/var/lib/dpkg/status" in stripped
+        ):
+            origins.append(stripped)
+
+    return origins
+
+
+def _source_for_repository_url(url):
+    host = (urlparse(url).hostname or "").lower()
+
+    if host.startswith("ppa.") or "launchpad" in host:
+        return "PPA"
+
+    if host == "ubuntu.com" or host.endswith(".ubuntu.com"):
+        return "Ubuntu Repository"
+
+    if host == "debian.org" or host.endswith(".debian.org"):
+        return "Debian Repository"
+
+    return "Vendor Repository"
+
+
+def _confidence_label(score):
+    if score >= 75:
+        return "High"
+
+    if score >= 40:
+        return "Medium"
+
+    return "Low"
+
+
+def package_provenance(package):
     result = subprocess.run(
         ["apt-cache", "policy", package],
         capture_output=True,
         text=True,
     )
+    policy_output = result.stdout or ""
+    installed_version = None
+    candidate_version = None
 
-    policy_output = (result.stdout or "").lower()
+    for line in policy_output.splitlines():
+        if line.strip().lower().startswith("installed:"):
+            installed_version = line.split(":", 1)[1].strip()
+        elif line.strip().lower().startswith("candidate:"):
+            candidate_version = line.split(":", 1)[1].strip()
 
-    show_result = subprocess.run(
-        ["apt-cache", "show", package],
-        capture_output=True,
-        text=True,
-    )
+    is_installed = installed_version and installed_version != "(none)"
+    selected_version = installed_version if is_installed else candidate_version
+    origins = _policy_origins_for_version(policy_output, selected_version)
+    repository_urls = []
+    has_dpkg_status_origin = False
 
-    show_output = (show_result.stdout or "").lower()
+    for origin in origins:
+        if "/var/lib/dpkg/status" in origin:
+            has_dpkg_status_origin = True
 
-    # Strong signals are concrete upstream URLs or PPA-hosted apt metadata.
-    if "ppa." in policy_output or "ppa/" in policy_output:
-        return "PPA"
+        for token in origin.split():
+            if token.startswith(("http://", "https://")):
+                repository_urls.append(token.rstrip("),"))
 
-    if "packages.microsoft.com" in policy_output or "packages.microsoft.com" in show_output:
-        return "Vendor Repository"
+    repository_urls = sorted(set(repository_urls))
 
-    if (
-        "archive.ubuntu.com" in policy_output
-        or "security.ubuntu.com" in policy_output
-        or "ubuntu.com" in policy_output
-        or "origin: ubuntu" in show_output
-        or "origin: canonical" in show_output
-    ):
-        return "Ubuntu Repository"
+    if repository_urls:
+        source_types = {
+            _source_for_repository_url(url) for url in repository_urls
+        }
 
-    if is_local_candidate(package):
-        return "Local .deb Candidate"
+        if len(source_types) > 1:
+            source = "Multiple Sources"
+            score = 45
+            evidence = [
+                "The selected package version is listed in repositories of "
+                f"multiple types: {', '.join(sorted(source_types))}."
+            ]
+        else:
+            source = next(iter(source_types))
+            score = 90
+            version_kind = "installed" if is_installed else "candidate"
+            evidence = [
+                f"The selected {version_kind} version is listed at {url}."
+                for url in repository_urls
+            ]
+    elif is_installed and is_local_candidate(package):
+        source = "Local .deb Candidate"
+        score = 65
+        evidence = [
+            "APT marks the installed package as local, with no repository "
+            "origin for its installed version."
+        ]
+    elif is_installed and has_dpkg_status_origin:
+        source = "Local .deb Candidate"
+        score = 55
+        evidence = [
+            "The installed version appears only in dpkg status metadata; "
+            "no repository origin was found."
+        ]
+    else:
+        source = "Unknown"
+        score = 0
+        evidence = ["No repository origin or local-install signal was found."]
 
-    return "Unknown"
+    return {
+        "source": source,
+        "score": score,
+        "confidence": _confidence_label(score),
+        "evidence": evidence,
+    }
+
+
+def package_source(package):
+    return package_provenance(package)["source"]
 
 
 def package_version(package):
@@ -193,15 +279,7 @@ def package_version(package):
 
 
 def package_confidence(package):
-    source = package_source(package)
-
-    if source in {"PPA", "Ubuntu Repository", "Vendor Repository"}:
-        return "High"
-
-    if source == "Local .deb Candidate":
-        return "Medium"
-
-    return "Low"
+    return package_provenance(package)["confidence"]
 
 
 # =================================
@@ -492,9 +570,8 @@ def main():
     package = sys.argv[1]
 
     state = package_state(package)
-    source = package_source(package)
+    provenance = package_provenance(package)
     version = package_version(package)
-    confidence = package_confidence(package)
     icon = state_icon(state)
 
     print_banner()
@@ -503,9 +580,13 @@ def main():
     print()
 
     print(f"    State      : {state}")
-    print(f"    Source     : {source}")
+    print(f"    Source     : {provenance['source']}")
     print(f"    Version    : {version}")
-    print(f"    Confidence : {confidence}")
+    print(
+        f"    Confidence : {provenance['confidence']} "
+        f"({provenance['score']}/100)"
+    )
+    print(f"    Evidence   : {'; '.join(provenance['evidence'])}")
 
 
 if __name__ == "__main__":
