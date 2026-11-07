@@ -96,6 +96,39 @@ def package_state(package):
     return "Unknown"
 
 
+def is_local_candidate(package):
+    result = subprocess.run(
+        ["apt", "list", "--installed"],
+        capture_output=True,
+        text=True,
+    )
+
+    for line in result.stdout.splitlines():
+        if "[installed,local]" not in line:
+            continue
+
+        installed_package = line.split("/")[0].strip()
+
+        if installed_package == package:
+            return True
+
+    policy = subprocess.run(
+        ["apt-cache", "policy", package],
+        capture_output=True,
+        text=True,
+    )
+
+    policy_output = (policy.stdout or "").lower()
+
+    installed_line = any(
+        "installed:" in line.lower() for line in (policy.stdout or "").splitlines()
+    )
+
+    candidate_line = "candidate:" in policy_output
+
+    return installed_line and not candidate_line
+
+
 def package_source(package):
     result = subprocess.run(
         ["apt-cache", "policy", package],
@@ -103,19 +136,34 @@ def package_source(package):
         text=True,
     )
 
-    output = result.stdout.lower()
+    policy_output = (result.stdout or "").lower()
 
-    if "ppa.launchpadcontent.net" in output or "ppa." in output:
+    show_result = subprocess.run(
+        ["apt-cache", "show", package],
+        capture_output=True,
+        text=True,
+    )
+
+    show_output = (show_result.stdout or "").lower()
+
+    # Strong signals are concrete upstream URLs or PPA-hosted apt metadata.
+    if "ppa." in policy_output or "ppa/" in policy_output:
         return "PPA"
 
-    if "archive.ubuntu.com" in output:
-        return "Ubuntu Repository"
-
-    if "security.ubuntu.com" in output:
-        return "Ubuntu Repository"
-
-    if "packages.microsoft.com" in output:
+    if "packages.microsoft.com" in policy_output or "packages.microsoft.com" in show_output:
         return "Vendor Repository"
+
+    if (
+        "archive.ubuntu.com" in policy_output
+        or "security.ubuntu.com" in policy_output
+        or "ubuntu.com" in policy_output
+        or "origin: ubuntu" in show_output
+        or "origin: canonical" in show_output
+    ):
+        return "Ubuntu Repository"
+
+    if is_local_candidate(package):
+        return "Local .deb Candidate"
 
     return "Unknown"
 
@@ -142,6 +190,18 @@ def package_version(package):
             candidate = line.split("Candidate:")[1].strip()
 
     return candidate if candidate and candidate != "(none)" else "Unknown"
+
+
+def package_confidence(package):
+    source = package_source(package)
+
+    if source in {"PPA", "Ubuntu Repository", "Vendor Repository"}:
+        return "High"
+
+    if source == "Local .deb Candidate":
+        return "Medium"
+
+    return "Low"
 
 
 # =================================
@@ -434,6 +494,7 @@ def main():
     state = package_state(package)
     source = package_source(package)
     version = package_version(package)
+    confidence = package_confidence(package)
     icon = state_icon(state)
 
     print_banner()
@@ -441,9 +502,10 @@ def main():
     print(f"[{icon}] {package}")
     print()
 
-    print(f"    State   : {state}")
-    print(f"    Source  : {source}")
-    print(f"    Version : {version}")
+    print(f"    State      : {state}")
+    print(f"    Source     : {source}")
+    print(f"    Version    : {version}")
+    print(f"    Confidence : {confidence}")
 
 
 if __name__ == "__main__":
