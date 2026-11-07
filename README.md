@@ -4,6 +4,15 @@ Beacon discovers software installed outside traditional package
 repositories and helps users identify, track, and update software
 from upstream sources.
 
+## Current Features
+
+- Package inspection
+- Package version detection
+- Package source detection
+- System inventory scanning
+- Repository inventory reporting
+- Repository classification
+
 ## Goals
 
 - Discover unmanaged software
@@ -20,16 +29,31 @@ from upstream sources.
 
 ## Roadmap
 
-### v0.1
-- Scan installed software
-- Detect unmanaged packages
-- Discover upstream GitHub repositories
+### v0.1.2
+
+- Configuration-remains inventory (`--clean`)
+
+### v0.1.3
+
+- Local package detection (`--local`)
+- Detect packages installed outside repository management
 
 ### v0.2
-- Release monitoring
+
+- System audit engine (`--audit`)
+- Repository health checks
 
 ### v0.3
-- Update installation
+
+- GitHub release tracking
+- Upstream version monitoring
+
+### v0.4
+
+- Application inventory management
+- Mixed source tracking (APT, GitHub, local .deb)
 
 ### v1.0
+
 - Topgrade integration
+- Obtainium-style application tracking
