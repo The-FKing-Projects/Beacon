@@ -265,6 +265,17 @@ def config_remains_count():
     return result.stdout.strip()
 
 
+def orphaned_package_count():
+    result = subprocess.run(
+        "apt-mark showauto | wc -l",
+        shell=True,
+        capture_output=True,
+        text=True,
+    )
+
+    return result.stdout.strip()
+
+
 def scan_summary():
     print_banner()
 
@@ -273,6 +284,9 @@ def scan_summary():
 
     print(f"Installed Packages : {installed_count()}")
     print(f"Config Remains     : {config_remains_count()}")
+    print(f"Orphaned Packages  : {orphaned_package_count()}")
+    print()
+
     print(f"Repository Files   : {repository_file_count()}")
     print(f"PPA Repositories   : {ppa_repository_count()}")
     print(f"Vendor Repositories: {vendor_repository_count()}")
