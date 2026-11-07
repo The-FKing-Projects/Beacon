@@ -2,8 +2,21 @@
 
 VERSION = "0.1.1"
 
+import os
 import subprocess
 import sys
+
+
+# =================================
+# UI FUNCTIONS
+# =================================
+
+def print_banner():
+    print("=================================")
+    print(" Beacon Discovery Engine")
+    print("=================================")
+    print()
+
 
 def help_menu():
     print("Beacon Discovery Engine")
@@ -21,6 +34,22 @@ def help_menu():
     print("    beacon.py steam")
     print("    beacon.py clovereye")
     print("    beacon.py --scan")
+
+
+def state_icon(state):
+    icons = {
+        "Installed": "✓",
+        "Config Remains": "!",
+        "Available": "↓",
+        "Unknown": "?",
+    }
+
+    return icons.get(state, "?")
+
+
+# =================================
+# PACKAGE FUNCTIONS
+# =================================
 
 def package_exists(package):
     result = subprocess.run(
@@ -61,6 +90,7 @@ def package_state(package):
 
     return "Unknown"
 
+
 def package_source(package):
     result = subprocess.run(
         ["apt-cache", "policy", package],
@@ -83,6 +113,7 @@ def package_source(package):
         return "Vendor Repository"
 
     return "Unknown"
+
 
 def package_version(package):
     result = subprocess.run(
@@ -107,6 +138,36 @@ def package_version(package):
 
     return candidate if candidate and candidate != "(none)" else "Unknown"
 
+
+# =================================
+# REPOSITORY FUNCTIONS
+# =================================
+
+def active_repository_files():
+    path = "/etc/apt/sources.list.d"
+
+    files = []
+
+    for entry in os.listdir(path):
+
+        full_path = os.path.join(path, entry)
+
+        if os.path.isfile(full_path):
+
+            if entry.endswith(".sources") or entry.endswith(".list"):
+                files.append(full_path)
+
+    return files
+
+
+def repository_file_count():
+    return len(active_repository_files())
+
+
+# =================================
+# SCAN FUNCTIONS
+# =================================
+
 def installed_count():
     result = subprocess.run(
         "dpkg -l | grep '^ii' | wc -l",
@@ -117,6 +178,7 @@ def installed_count():
 
     return result.stdout.strip()
 
+
 def config_remains_count():
     result = subprocess.run(
         "dpkg -l | grep '^rc' | wc -l",
@@ -125,30 +187,23 @@ def config_remains_count():
         text=True,
     )
 
-    return result.stdout.strip()  
+    return result.stdout.strip()
 
-def print_banner():
-    print("=================================")
-    print(" Beacon Discovery Engine")
-    print("=================================")
-    print()
 
 def scan_summary():
     print_banner()
+
     print("System Summary")
     print()
+
     print(f"Installed Packages : {installed_count()}")
     print(f"Config Remains     : {config_remains_count()}")
+    print(f"Repository Files   : {repository_file_count()}")
 
-def state_icon(state):
-    icons = {
-        "Installed": "✓",
-        "Config Remains": "!",
-        "Available": "↓",
-        "Unknown": "?",
-    }
 
-    return icons.get(state, "?")
+# =================================
+# MAIN
+# =================================
 
 def main():
 
@@ -176,13 +231,14 @@ def main():
     icon = state_icon(state)
 
     print_banner()
-    print()
+
     print(f"[{icon}] {package}")
     print()
 
     print(f"    State   : {state}")
     print(f"    Source  : {source}")
     print(f"    Version : {version}")
+
 
 if __name__ == "__main__":
     main()
