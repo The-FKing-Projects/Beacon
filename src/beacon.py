@@ -3,6 +3,28 @@
 import subprocess
 import sys
 
+def package_source(package):
+    result = subprocess.run(
+        ["apt-cache", "policy", package],
+        capture_output=True,
+        text=True,
+    )
+
+    output = result.stdout.lower()
+
+    if "ppa.launchpadcontent.net" in output or "ppa." in output:
+        return "PPA"
+
+    if "archive.ubuntu.com" in output:
+        return "Ubuntu Repository"
+
+    if "security.ubuntu.com" in output:
+        return "Ubuntu Repository"
+
+    if "packages.microsoft.com" in output:
+        return "Vendor Repository"
+
+    return "Unknown"
 
 def package_state(package):
     result = subprocess.run(
@@ -21,6 +43,13 @@ def package_state(package):
 
     return "Unknown"
 
+def state_icon(state):
+    icons = {
+        "Installed": "✓",
+        "Config Remains": "!",
+        "Unknown": "?",
+    }
+    return icons.get(state, "?")
 
 def main():
     if len(sys.argv) != 2:
@@ -29,8 +58,19 @@ def main():
 
     package = sys.argv[1]
 
-    print(f"Package: {package}")
-    print(f"State: {package_state(package)}")
+    state = package_state(package)
+    source = package_source(package)
+    icon = state_icon(state)
+
+    print("=================================")
+    print(" Beacon Discovery Engine")
+    print("=================================")
+    print()
+
+    print(f"[{icon}] {package}")
+    print()
+    print(f"    State  : {state}")
+    print(f"    Source : {source}")
 
 
 if __name__ == "__main__":
