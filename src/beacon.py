@@ -239,6 +239,17 @@ def vendor_repository_count():
 
     return count
 
+
+def repository_names():
+
+    names = []
+
+    for repo_file in active_repository_files():
+
+        names.append(os.path.basename(repo_file))
+
+    return sorted(names)
+
 # =================================
 # SCAN FUNCTIONS
 # =================================
@@ -286,16 +297,21 @@ def scan_summary():
     print("System Summary")
     print()
 
-    print(f"Installed Packages : {installed_count()}")
-    print(f"Manual Installed   : {manual_installed_count()}")
-    print(f"Auto Installed     : {auto_installed_count()}")
-    print(f"Config Remains     : {config_remains_count()}")
+    print(f"Total Packages          : {installed_count()}")
+    print(f"Manually Installed      : {manual_installed_count()}")
+    print(f"Automatically Installed : {auto_installed_count()}")
+    print(f"Configuration Remains   : {config_remains_count()}")
     print()
 
-    print(f"Repository Files   : {repository_file_count()}")
-    print(f"PPA Repositories   : {ppa_repository_count()}")
-    print(f"Vendor Repositories: {vendor_repository_count()}")
-    print(f"Ubuntu Repositories: {ubuntu_repository_count()}")
+    print(f"Repository Files        : {repository_file_count()}")
+    print(f"PPA Repositories        : {ppa_repository_count()}")
+    print(f"Vendor Repositories     : {vendor_repository_count()}")
+    print(f"Ubuntu Repositories     : {ubuntu_repository_count()}")
+
+    print("Repositories:")
+
+    for repo in repository_names():
+        print(f"  - {repo}")
 
 # =================================
 # MAIN
