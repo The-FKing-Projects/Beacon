@@ -164,6 +164,41 @@ def repository_file_count():
     return len(active_repository_files())
 
 
+def ppa_repository_count():
+
+    count = 0
+
+    for repo_file in active_repository_files():
+
+        try:
+
+            with open(repo_file, "r") as file:
+
+                content = file.read().lower()
+
+                if "ppa.launchpadcontent.net" in content:
+                    count += 1
+
+        except Exception:
+            pass
+
+    return count
+
+
+def vendor_repository_count():
+
+    count = 0
+
+    for repo_file in active_repository_files():
+
+        try:
+
+            with open(repo_file, "r") as file:
+
+                content = file.read().lower()
+
+                if "ppa.launchpadcontent
+
 # =================================
 # SCAN FUNCTIONS
 # =================================
@@ -199,6 +234,8 @@ def scan_summary():
     print(f"Installed Packages : {installed_count()}")
     print(f"Config Remains     : {config_remains_count()}")
     print(f"Repository Files   : {repository_file_count()}")
+    print(f"PPA Repositories   : {ppa_repository_count()}")
+    print(f"Vendor Repositories: {vendor_repository_count()}")
 
 
 # =================================
