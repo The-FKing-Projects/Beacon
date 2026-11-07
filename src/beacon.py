@@ -310,19 +310,15 @@ def scan_summary():
     print(f"Vendor Repositories     : {vendor_repository_count()}")
     print(f"Ubuntu Repositories     : {ubuntu_repository_count()}")
 
-    print("Repositories:")
+
+def repository_summary():
+    print_banner()
+
+    print("Repository Inventory")
+    print()
 
     for repo in repository_names():
         print(f"  - {repo}")
-
-    def repository_summary():
-        print_banner()
-
-        print("Repository Inventory")
-        print()
-
-        for repo in repository_names():
-            print(f"  - {repo}")
 
 # =================================
 # MAIN
