@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-VERSION = "0.1.1"
+VERSION = "0.1.2"
 
 import os
 import subprocess
@@ -29,13 +29,17 @@ def help_menu():
     print("    --version    Show Beacon version.")
     print("    --scan       Show system summary.")
     print("    --repos      Show repository inventory.")
+    print("    --clean      Show configuration remains.")
+    print("    --local      Show locally installed packages.")
     print()
     print("Examples:")
     print("    beacon.py floorp")
     print("    beacon.py steam")
-    print("    beacon.py clovereye")
+    print("    beacon.py clover-eye")
     print("    beacon.py --scan")
     print("    beacon.py --repos")
+    print("    beacon.py --clean")
+    print("    beacon.py --local")
 
 
 def state_icon(state):
@@ -47,7 +51,6 @@ def state_icon(state):
     }
 
     return icons.get(state, "?")
-
 
 # =================================
 # PACKAGE FUNCTIONS
@@ -293,6 +296,46 @@ def manual_installed_count():
     return installed_count() - auto_installed_count()
 
 
+def config_remains_packages():
+    result = subprocess.run(
+        "dpkg -l | grep '^rc'",
+        shell=True,
+        capture_output=True,
+        text=True,
+    )
+
+    packages = []
+
+    for line in result.stdout.splitlines():
+
+        parts = line.split()
+
+        if len(parts) >= 2:
+            packages.append(parts[1])
+
+    return sorted(packages)
+
+
+def local_packages():
+    result = subprocess.run(
+        ["apt", "list", "--installed"],
+        capture_output=True,
+        text=True,
+    )
+
+    packages = []
+
+    for line in result.stdout.splitlines():
+
+        if "[installed,local]" in line:
+
+            package = line.split("/")[0]
+
+            packages.append(package)
+
+    return sorted(packages)
+
+
 def scan_summary():
     print_banner()
 
@@ -320,6 +363,38 @@ def repository_summary():
     for repo in repository_names():
         print(f"  - {repo}")
 
+
+def clean_summary():
+    print_banner()
+
+    print("Configuration Remains")
+    print()
+
+    packages = config_remains_packages()
+
+    for package in packages:
+        print(f"  - {package}")
+
+    print()
+
+    print(f"Total Packages : {len(packages)}")
+
+
+def local_summary():
+    print_banner()
+
+    print("Local Packages")
+    print()
+
+    packages = local_packages()
+
+    for package in packages:
+        print(f"  - {package}")
+
+    print()
+
+    print(f"Total Local Packages : {len(packages)}")
+
 # =================================
 # MAIN
 # =================================
@@ -344,6 +419,14 @@ def main():
 
     if sys.argv[1] == "--repos":
         repository_summary()
+        sys.exit(0)
+
+    if sys.argv[1] == "--clean":
+        clean_summary()
+        sys.exit(0)
+
+    if sys.argv[1] == "--local":
+        local_summary()
         sys.exit(0)
 
     package = sys.argv[1]
