@@ -185,6 +185,31 @@ def ppa_repository_count():
     return count
 
 
+def ubuntu_repository_count():
+
+    count = 0
+
+    for repo_file in active_repository_files():
+
+        try:
+
+            with open(repo_file, "r") as file:
+
+                content = file.read().lower()
+
+                if (
+                    "archive.ubuntu.com" in content
+                    or "security.ubuntu.com" in content
+                    or "ubuntu.com" in content
+                ):
+                    count += 1
+
+        except Exception:
+            pass
+
+    return count
+
+
 def vendor_repository_count():
 
     count = 0
@@ -197,7 +222,22 @@ def vendor_repository_count():
 
                 content = file.read().lower()
 
-                if "ppa.launchpadcontent
+                if "ppa.launchpadcontent.net" in content:
+                    continue
+
+                if (
+                    "archive.ubuntu.com" in content
+                    or "security.ubuntu.com" in content
+                    or "ubuntu.com" in content
+                ):
+                    continue
+
+                count += 1
+
+        except Exception:
+            pass
+
+    return count
 
 # =================================
 # SCAN FUNCTIONS
@@ -236,7 +276,7 @@ def scan_summary():
     print(f"Repository Files   : {repository_file_count()}")
     print(f"PPA Repositories   : {ppa_repository_count()}")
     print(f"Vendor Repositories: {vendor_repository_count()}")
-
+    print(f"Ubuntu Repositories: {ubuntu_repository_count()}")
 
 # =================================
 # MAIN
