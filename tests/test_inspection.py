@@ -1,5 +1,6 @@
 import contextlib
 import hashlib
+from http.client import IncompleteRead
 import io
 import os
 from pathlib import Path
@@ -57,6 +58,10 @@ class InspectionTest(unittest.TestCase):
         path.write_text(f"{digest}  app.deb\n{digest} *app.deb\n", encoding="utf-8")
         with self.assertRaisesRegex(tracking.TrackingError, "Multiple"):
             inspection.expected_checksum(path, "app.deb")
+        for value in ("invalid", "a" * 63, "g" * 64):
+            path.write_text(f"{value}  app.deb\n", encoding="utf-8")
+            with self.subTest(value=value), self.assertRaisesRegex(tracking.TrackingError, "Invalid SHA256"):
+                inspection.expected_checksum(path, "app.deb")
 
     def test_asset_without_checksum_and_multiple_sums(self):
         self.release["assets"].pop()
@@ -76,10 +81,15 @@ class InspectionTest(unittest.TestCase):
             "Package: app\nVersion: 1.2.3-1\nArchitecture: all\n"
             "Maintainer: Test <test@example.test>\nDescription: Test package\n"
         )
+        sentinel = Path(self.temp.name) / "script-ran"
+        script = root / "DEBIAN" / "postinst"
+        script.write_text(f"#!/bin/sh\ntouch '{sentinel}'\n")
+        script.chmod(0o755)
         archive = Path(self.temp.name) / "app.deb"
         subprocess.run(["dpkg-deb", "--build", str(root), str(archive)],
                        capture_output=True, check=True)
         self.assertEqual(inspection.inspect_fields(archive), ["app", "all", "1.2.3-1"])
+        self.assertFalse(sentinel.exists())
         archive.write_text("not a deb")
         with self.assertRaisesRegex(tracking.TrackingError, "Unable to inspect"):
             inspection.inspect_fields(archive)
@@ -101,6 +111,18 @@ class InspectionTest(unittest.TestCase):
                 with self.assertRaisesRegex(tracking.TrackingError, error):
                     inspection.download("https://github.com/a", destination, limit)
                 destination.unlink(missing_ok=True)
+
+    def test_interrupted_response_reports_error(self):
+        class InterruptedResponse(io.BytesIO):
+            headers = {}
+
+            def read(self, size=-1):
+                raise IncompleteRead(b"partial", 100)
+
+        with patch("inspection.build_opener") as opener:
+            opener.return_value.open.return_value = InterruptedResponse()
+            with self.assertRaisesRegex(tracking.TrackingError, "Unable to download"):
+                inspection.download("https://github.com/a", Path(self.temp.name) / "asset", 100)
 
     def test_version_comparison_debian_semantics(self):
         self.assertEqual(inspection.version_relation("1.0-1", "1.0-2"), "newer")
@@ -140,6 +162,11 @@ class InspectionTest(unittest.TestCase):
         self.assertIn("asset is newer", output)
         self.assertIn("No package was installed", output)
         self.assertIn("asset is newer", self.run_inspection(metadata=("app", "all", "1.2.0")))
+
+    def test_missing_checksum_is_reported_without_claiming_integrity(self):
+        self.release["assets"].pop()
+        output = self.run_inspection()
+        self.assertIn("no SHA256SUMS asset available; integrity not verified", output)
 
     def test_inspection_rejects_mismatches_and_cleans_up(self):
         for metadata, error in [(("other", "amd64", "1.2"), "name mismatch"),

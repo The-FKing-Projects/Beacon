@@ -2,6 +2,7 @@
 
 from contextlib import closing
 import hashlib
+from http.client import HTTPException
 import re
 import subprocess
 import tempfile
@@ -68,7 +69,7 @@ def download(url, destination, limit):
         detail = f"HTTP {exc.code}"
         exc.close()
         raise tracking.TrackingError(f"Unable to download release asset: {detail}") from exc
-    except (OSError, URLError) as exc:
+    except (OSError, URLError, HTTPException) as exc:
         raise tracking.TrackingError(f"Unable to download release asset: {exc}") from exc
     return digest.hexdigest()
 
@@ -120,9 +121,11 @@ def expected_checksum(path, filename):
         raise tracking.TrackingError(f"Unable to read SHA256SUMS: {exc}") from exc
     matches = []
     for line in lines:
-        match = re.fullmatch(r"([0-9a-fA-F]{64}) [ *](.+)", line)
-        if match and match.group(2) in (filename, "./" + filename):
-            matches.append(match.group(1).lower())
+        entry = re.fullmatch(r"(\S+) [ *](.+)", line)
+        if entry and entry.group(2) in (filename, "./" + filename):
+            if not re.fullmatch(r"[0-9a-fA-F]{64}", entry.group(1)):
+                raise tracking.TrackingError("Invalid SHA256 checksum entry for the asset.")
+            matches.append(entry.group(1).lower())
     if not matches:
         return None
     if len(matches) != 1:
@@ -214,4 +217,4 @@ def inspect(package, filename):
         print(f"Debian version comparison: asset is {relation} than installed." if relation != "same"
               else "Debian version comparison: asset and installed versions are the same.")
         print("Metadata and checksum do not prove authenticity or dependency compatibility.")
-        print("No package was installed; the temporary download was removed.")
+    print("No package was installed; the temporary download was removed.")

@@ -64,7 +64,10 @@ architecture, and Debian version to the installed package, and then removes the
 download. Downloads are limited to 512 MiB. If the release has a `SHA256SUMS`
 asset, Beacon checks an exact filename entry; a missing entry or checksum file
 is reported, and a mismatch stops inspection. The checksum is not authenticated
-and does not prove authenticity. The command does not check dependencies or
+and does not prove authenticity: someone able to replace both the asset and
+the manifest can make them match. Only a file named `SHA256SUMS` with a
+supported exact-filename entry is checked; other checksum formats are not.
+The command does not check dependencies or
 execute package maintainer scripts, and never installs a package.
 
 ## Direction
@@ -86,7 +89,8 @@ to APT for installation. Before any such handoff, the workflow must check the
 upstream identity, package identity and architecture, and available
 verification evidence; a confidence score alone is not proof of authenticity.
 Details of download verification and installation approval remain to be
-designed. Beacon should surface ambiguity instead of guessing.
+decided; see the [APT handoff safety design](docs/design/apt-handoff.md).
+Beacon should surface ambiguity instead of guessing.
 
 An APT local or dpkg-only signal is a **candidate**, not proof that a package
 was originally installed from a standalone `.deb`: its repository may have
