@@ -5,7 +5,8 @@
 This research evaluates how Beacon could discover software installed through
 Flatpak, Snap, AppImage files, standalone binaries, and custom installers. The
 goal is to identify reliable evidence and limits, not to replace those
-installation systems or install, remove, or update software.
+installation systems. This research does not propose installing, removing,
+or updating software from these sources.
 
 ## Findings
 
@@ -38,9 +39,11 @@ but desktop entries describe launchers and are not an installation database.
 4. Defer general standalone-binary and custom-installer detection until Beacon
    defines explicit search roots or supported installer interfaces. Do not
    recursively scan the whole filesystem or infer provenance from filenames.
-5. Keep discovery distinct from update operations. Any future update tracking
-   should use the owning manager's documented interfaces and remain separate
-   from APT rather than acting as a package manager.
+5. Keep discovery distinct from update operations. Future support for other
+   formats should respect their owning managers' documented interfaces rather
+   than acting as a replacement package manager. Beacon's separate
+   standalone `.deb` goal may eventually include preparing an update for an
+   APT handoff; it is not part of this non-dpkg research.
 
 An adapter should distinguish an unavailable manager, a failed inventory
 command, and an empty inventory. A missing command or inaccessible scope is not
