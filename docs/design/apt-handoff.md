@@ -23,8 +23,20 @@ installation workflow must be designed and reviewed separately.
   distinctly; do not describe an unsigned match as a verified publisher.
 - A future stronger authenticity check needs an independently trusted key or
   digest and a documented verification method. Key discovery, trust,
-  rotation, revocation, and what to do when no signed metadata exists remain
-  open product decisions; do not assume all projects provide signatures.
+  rotation, and revocation remain open product decisions; do not assume all
+  projects provide signatures.
+
+## Reviewed product decisions
+
+- When independent authenticity verification is unavailable, Beacon may
+  proceed only after a clear warning and explicit user approval. An unsigned
+  checksum from the same release does not establish authenticity. This
+  exception does not override a failed or mismatched verification check.
+- Block an APT handoff if the proposed dependency plan removes other installed
+  packages, and show the proposed removals. Do not silently proceed even if
+  the user approved an earlier plan.
+- Block downgrades: an asset older than the installed package must not be
+  handed off for installation.
 
 ## Proposed handoff requirements
 
@@ -42,24 +54,28 @@ installation workflow must be designed and reviewed separately.
    instead of executing the `.deb`, running arbitrary installer commands, or
    replacing the package manager. Preview APT's proposed dependency changes,
    removals, and upgrades; treat errors and unresolved dependencies as
-   blockers. A simulation is advisory, not a guarantee: repositories and
-   installed state can change before the real transaction.
+   blockers. Block plans that remove installed packages. A simulation is
+   advisory, not a guarantee: repositories and installed state can change
+   before the real transaction. The implementation must prevent a changed
+   real plan from bypassing the removal restriction, not rely on preview
+   alone.
 4. Require a clear, fresh confirmation of the planned APT action after the
-   preview and before requesting elevated privileges. Do not silently accept
-   removals, downgrades, or other changes beyond what was shown. Decide how to
-   handle APT's own interactive prompts, changing plans, and non-interactive
-   sessions before implementation.
+   preview and before requesting elevated privileges. Block removals and
+   downgrades; do not silently accept other changes beyond what was shown.
+   Decide how to handle APT's own interactive prompts, changing plans, and
+   non-interactive sessions before implementation.
 5. Explain that installation may execute package maintainer scripts with
    elevated privileges. Report APT failures and partial state accurately;
    never claim an installation succeeded based only on initiating a command.
 
 ## Decisions still needed
 
-The minimum acceptable authenticity evidence, whether and how a user can
-explicitly accept missing verification, handling of downgrades and dependency
-removals, privilege escalation UX, and the precise APT invocation and preview
-mechanism are not yet decided. The design must be tested on supported Debian
-and Ubuntu versions, including interrupted operations and changed system state.
+The acceptable forms of independent authenticity evidence, how to present
+approval for missing verification, handling same-version reinstalls and
+incomparable versions, privilege escalation UX, and the precise APT invocation
+and preview mechanism are not yet decided. The design must be tested on
+supported Debian and Ubuntu versions, including interrupted operations and
+changed system state.
 
 ## Inspection examples
 
