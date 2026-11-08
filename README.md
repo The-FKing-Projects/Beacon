@@ -13,6 +13,7 @@ from upstream sources.
 - Repository inventory (`--repos`)
 - Configuration-remains inventory (`--clean`)
 - Local package inventory (`--local`)
+- Automated SemVer tags and GitHub Releases for qualifying merged pull requests
 
 ## Goals
 
@@ -27,6 +28,14 @@ from upstream sources.
 - Replacing Flatpak
 - Replacing Topgrade
 - Creating another Linux package manager
+
+## Releases
+
+Merged `feat:` pull requests trigger a minor release; `fix:` and `perf:`
+trigger patch releases. A `!` marker or `BREAKING CHANGE:` footer triggers a
+major release. Documentation, tests, and other non-feature changes do not
+release by default. See [automated release details](docs/research/release-automation.md)
+for the required repository settings.
 
 ## Roadmap
 
