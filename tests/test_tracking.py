@@ -64,7 +64,7 @@ class TrackingTest(unittest.TestCase):
             tracking.track("app", "Owner/Project")
         with patch("tracking.installed_package", return_value=("app", "amd64", "1.2.3")), \
              patch("tracking.resolve_repository", return_value=("Owner/Renamed", 123)), \
-             patch("tracking.latest_release", return_value=("v1.2.4", "https://github.com/Owner/Renamed/releases/tag/v1.2.4")):
+             patch("tracking.latest_release", return_value=("v1.2.4", "https://github.com/Owner/Renamed/releases/tag/v1.2.4", [])):
             output = io.StringIO()
             with contextlib.redirect_stdout(output):
                 tracking.check("app")
@@ -133,7 +133,9 @@ class TrackingTest(unittest.TestCase):
         responses = [
             {"full_name": "Owner/Project", "id": 123},
             {"full_name": "Owner/Project", "id": 123},
-            {"tag_name": "v1.2.4", "html_url": "https://github.com/Owner/Project/releases/tag/v1.2.4"},
+            {"tag_name": "v1.2.4", "html_url": "https://github.com/Owner/Project/releases/tag/v1.2.4",
+             "assets": [{"name": "app_1.2.4_amd64.deb", "browser_download_url":
+                         "https://github.com/Owner/Project/releases/download/v1.2.4/app_1.2.4_amd64.deb"}]},
         ]
         output = io.StringIO()
         with patch("tracking.subprocess.run", return_value=package_output), \
@@ -148,6 +150,59 @@ class TrackingTest(unittest.TestCase):
         self.assertIn("Association saved.", output.getvalue())
         self.assertIn("app:amd64  https://github.com/Owner/Project", output.getvalue())
         self.assertIn("Newer upstream release available.", output.getvalue())
+        self.assertIn("app_1.2.4_amd64.deb: Likely candidate", output.getvalue())
+
+    def test_asset_filename_matching(self):
+        cases = [
+            ("clovereye_0.1.0_amd64.deb", "clover-eye", "amd64", "Likely candidate"),
+            ("clover-eye-1.2.3-x86_64.deb", "clover-eye", "amd64", "Likely candidate"),
+            ("app_1.2.3_aarch64.deb", "app", "arm64", "Likely candidate"),
+            ("app_1.2.3_all.deb", "app", "amd64", "Likely candidate"),
+            ("app_1.2.3_arm64.deb", "app", "amd64", "Not suggested"),
+            ("different_1.2.3_amd64.deb", "app", "amd64", "Unverified"),
+            ("app_1.2.3.deb", "app", "amd64", "Unverified"),
+            ("app_1.2.3_amd64.deb", "app", "riscv64", "Not suggested"),
+        ]
+        for filename, package, architecture, expected in cases:
+            with self.subTest(filename=filename, architecture=architecture):
+                self.assertTrue(tracking.asset_match(filename, package, architecture).startswith(expected))
+
+    def test_asset_reporting_no_match_and_multiple_matches(self):
+        url = "https://github.com/owner/project/releases/download/v1/"
+        cases = [
+            ([], "none found"),
+            ([("app_1_arm64.deb", url + "arm")], "No likely candidates"),
+            ([("app_1_amd64.deb", url + "one"),
+              ("app_1_all.deb", url + "two")], "Multiple likely candidates"),
+            ([("app.deb", url + "unknown")], "architecture not recognized"),
+        ]
+        for assets, expected in cases:
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                tracking.print_deb_assets(assets, "app", "amd64")
+            self.assertIn(expected, output.getvalue())
+
+    def test_release_asset_validation(self):
+        release = {"tag_name": "v1", "html_url": "https://github.com/owner/repo/releases/tag/v1"}
+        cases = [
+            ({}, "missing release assets"),
+            ({"assets": None}, "missing release assets"),
+            ({"assets": [None]}, "invalid release asset"),
+            ({"assets": [{"name": "app.deb", "browser_download_url": "https://evil.test/app.deb"}]},
+             "invalid Debian asset URL"),
+            ({"assets": [{"name": "app\n.deb", "browser_download_url": "https://github.com/a/b"}]},
+             "invalid Debian release asset"),
+        ]
+        for addition, expected in cases:
+            with self.subTest(addition=addition), patch("tracking.github_get", return_value={**release, **addition}):
+                with self.assertRaisesRegex(tracking.TrackingError, expected):
+                    tracking.latest_release("owner/repo")
+        with patch("tracking.github_get", return_value={**release, "assets": [
+                {"name": "app.rpm"},
+                {"name": "app.deb", "browser_download_url": "https://github.com/owner/repo/releases/download/v1/app.deb"},
+        ]}):
+            _, _, assets = tracking.latest_release("owner/repo")
+            self.assertEqual(len(assets), 1)
 
 
 if __name__ == "__main__":

@@ -18,7 +18,7 @@ today. Automatic upstream matching and update preparation are not implemented.
 - Repository inventory (`--repos`)
 - Configuration-remains inventory (`--clean`)
 - Local package inventory (`--local`)
-- Manually confirmed GitHub associations and latest stable release checks
+- Manually confirmed GitHub associations, release checks, and `.deb` asset suggestions
 - Automated SemVer tags and GitHub Releases for qualifying merged pull requests
 
 ## Track a GitHub upstream
@@ -39,11 +39,15 @@ Associations are saved per user under `$XDG_STATE_HOME/beacon/tracking.sqlite3`
 requires confirmation before replacing an association.
 
 Checks query the public GitHub API without authentication and show the latest
-published stable release, not necessarily a compatible `.deb`. Network errors,
-rate limits, unavailable releases, and changed repository identities are
-reported. Version comparison is limited to three-component numeric versions
-with an optional `v` prefix; Debian revisions and other tags are reported as
-unknown. Beacon does not download or install updates.
+published stable release and its `.deb` assets. Beacon suggests likely assets
+when the filename resembles the installed package name and specifies a
+matching architecture (or `all`); it also shows other `.deb` assets for manual
+review and flags multiple likely candidates. Filenames are only hints: Beacon
+does not verify asset contents, compatibility, package identity, or integrity.
+Network errors, rate limits, unavailable releases, and changed repository
+identities are reported. Version comparison is limited to three-component
+numeric versions with an optional `v` prefix; Debian revisions and other tags
+are reported as unknown. Beacon does not download or install updates.
 
 ## Direction
 

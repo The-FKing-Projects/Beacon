@@ -15,6 +15,12 @@ from urllib.request import Request, urlopen
 PACKAGE_PATTERN = re.compile(r"^[a-z0-9][a-z0-9+.-]*(?::[a-z0-9][a-z0-9-]*)?$")
 REPOSITORY_PATTERN = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9_.-]+$")
 VERSION_PATTERN = re.compile(r"^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
+ASSET_ARCHITECTURES = {
+    "amd64": "amd64", "x86_64": "amd64", "x64": "amd64",
+    "arm64": "arm64", "aarch64": "arm64",
+    "i386": "i386", "i686": "i386", "x86": "i386",
+    "armhf": "armhf", "armel": "armel", "all": "all",
+}
 
 
 class TrackingError(Exception):
@@ -157,7 +163,66 @@ def latest_release(name):
     parsed = urlparse(url)
     if parsed.scheme != "https" or parsed.netloc.lower() != "github.com":
         raise TrackingError("GitHub returned an invalid release URL.")
-    return tag, url
+    assets = data.get("assets")
+    if not isinstance(assets, list):
+        raise TrackingError("GitHub returned invalid or missing release assets.")
+    deb_assets = []
+    for asset in assets:
+        if not isinstance(asset, dict) or not isinstance(asset.get("name"), str):
+            raise TrackingError("GitHub returned an invalid release asset.")
+        filename = asset["name"]
+        if not filename.lower().endswith(".deb"):
+            continue
+        asset_url = asset.get("browser_download_url")
+        if (not filename or any(ord(char) < 32 or ord(char) == 127 for char in filename)
+                or not isinstance(asset_url, str)
+                or any(ord(char) < 32 or ord(char) == 127 for char in asset_url)):
+            raise TrackingError("GitHub returned an invalid Debian release asset.")
+        parsed_asset = urlparse(asset_url)
+        if parsed_asset.scheme != "https" or parsed_asset.netloc.lower() != "github.com":
+            raise TrackingError("GitHub returned an invalid Debian asset URL.")
+        deb_assets.append((filename, asset_url))
+    return tag, url, deb_assets
+
+
+def asset_match(filename, package, architecture):
+    """Return filename evidence, not a guarantee of package compatibility."""
+    stem = filename[:-4].lower()
+    arch_match = re.search(
+        r"[_-](x86_64|aarch64|amd64|arm64|armhf|armel|i386|i686|x64|x86|all)$",
+        stem,
+    )
+    if not arch_match:
+        return "Unverified: architecture not recognized in filename"
+    asset_arch = ASSET_ARCHITECTURES[arch_match.group(1)]
+    if asset_arch != architecture and asset_arch != "all":
+        return f"Not suggested: filename indicates {asset_arch}, not {architecture}"
+    name_part = stem[:arch_match.start()]
+    # Remove a version only when it starts with a digit (or v followed by one).
+    name_part = re.sub(r"[_-]v?\d[^_]*$", "", name_part)
+    normalize = lambda value: re.sub(r"[-_.]", "", value.lower())
+    if normalize(name_part) != normalize(package):
+        return "Unverified: filename does not match the installed package name"
+    return f"Likely candidate: filename matches package name and {asset_arch} architecture"
+
+
+def print_deb_assets(assets, package, architecture):
+    if not assets:
+        print("Debian assets: none found in this release.")
+        return
+    print("Debian assets (filename-based suggestions, not verified packages):")
+    matches = 0
+    for filename, url in assets:
+        result = asset_match(filename, package, architecture)
+        if result.startswith("Likely candidate:"):
+            matches += 1
+        print(f"  {filename}: {result}")
+        print(f"    {url}")
+    if matches == 0:
+        print("No likely candidates found; review unverified assets manually.")
+    elif matches > 1:
+        print("Multiple likely candidates found; review them manually.")
+    print("Package identity, contents, compatibility, and integrity have not been verified.")
 
 
 def compare_versions(installed, tag):
@@ -222,7 +287,7 @@ def check(package):
     repository, identifier = resolve_repository(row[0])
     if identifier != row[1]:
         raise TrackingError("GitHub repository identity changed; confirm the upstream again before tracking.")
-    tag, url = latest_release(repository)
+    tag, url, assets = latest_release(repository)
     if repository != row[0]:
         with closing(open_database()) as db, db:
             result = db.execute(
@@ -238,6 +303,7 @@ def check(package):
     print(f"Latest stable release: {tag}")
     print(f"Release URL: {url}")
     print(f"Status: {compare_versions(version, tag)}")
+    print_deb_assets(assets, name, architecture)
 
 
 def list_tracked():
