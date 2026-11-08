@@ -1,0 +1,129 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: beacon-release-main
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.event.deleted == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Find the merged pull request
+        id: pull-request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT_SHA: ${{ github.event.after }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+          import uuid
+
+          result = subprocess.run(
+              [
+                  "gh",
+                  "api",
+                  f"repos/{os.environ['GITHUB_REPOSITORY']}/commits/"
+                  f"{os.environ['COMMIT_SHA']}/pulls",
+              ],
+              check=True,
+              capture_output=True,
+              text=True,
+          )
+          pull_requests = [
+              pull_request
+              for pull_request in json.loads(result.stdout)
+              if pull_request.get("merged_at")
+              and pull_request.get("base", {}).get("ref") == "main"
+          ]
+
+          if not pull_requests:
+              with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+                  output.write("found=false\n")
+              print("No merged pull request found for this main-branch commit.")
+              raise SystemExit(0)
+
+          if len(pull_requests) != 1:
+              raise SystemExit(
+                  f"Expected one merged pull request for commit, found "
+                  f"{len(pull_requests)}; refusing an ambiguous release."
+              )
+
+          pull_request = pull_requests[0]
+          values = {
+              "found": "true",
+              "number": str(pull_request["number"]),
+              "title": pull_request["title"],
+              "body": pull_request.get("body") or "",
+          }
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              for name, value in values.items():
+                  delimiter = f"EOF_{uuid.uuid4().hex}"
+                  output.write(f"{name}<<{delimiter}\n{value}\n{delimiter}\n")
+          PY
+
+      - name: Prepare release version
+        if: steps.pull-request.outputs.found == 'true'
+        id: plan
+        env:
+          PR_TITLE: ${{ steps.pull-request.outputs.title }}
+          PR_BODY: ${{ steps.pull-request.outputs.body }}
+          PR_NUMBER: ${{ steps.pull-request.outputs.number }}
+        run: |
+          git fetch origin main --tags
+          git checkout -B release-main origin/main
+          python3 scripts/release.py \
+            --title "$PR_TITLE" \
+            --body "$PR_BODY" \
+            --pr-number "$PR_NUMBER" \
+            --version-file src/beacon.py
+
+      - name: Create and push release tag
+        if: steps.plan.outputs.release == 'true' && steps.plan.outputs.reused == 'false'
+        env:
+          VERSION: ${{ steps.plan.outputs.version }}
+          TAG: ${{ steps.plan.outputs.tag }}
+          BUMP: ${{ steps.plan.outputs.bump }}
+          PR_NUMBER: ${{ steps.pull-request.outputs.number }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/beacon.py
+          git commit \
+            -m "chore(release): v$VERSION" \
+            -m "SemVer $BUMP release for pull request #$PR_NUMBER."
+          git tag -a "$TAG" -m "Beacon $TAG" -m "Beacon-PR: #$PR_NUMBER"
+          git push --atomic origin HEAD:main "refs/tags/$TAG"
+
+      - name: Publish GitHub Release
+        if: steps.plan.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.plan.outputs.tag }}
+          PR_NUMBER: ${{ steps.pull-request.outputs.number }}
+          PR_TITLE: ${{ steps.pull-request.outputs.title }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists."
+            exit 0
+          fi
+
+          gh release create "$TAG" \
+            --title "Beacon $TAG" \
+            --notes "Automated release for #$PR_NUMBER: $PR_TITLE <!-- beacon-release-pr:$PR_NUMBER -->"
