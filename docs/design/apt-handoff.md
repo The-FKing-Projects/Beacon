@@ -77,6 +77,57 @@ and preview mechanism are not yet decided. The design must be tested on
 supported Debian and Ubuntu versions, including interrupted operations and
 changed system state.
 
+## APT investigation and release gate
+
+The documented `apt-get --simulate` mode does not lock the package state.
+The installed system, repository metadata, and configuration may therefore
+change after a preview. An unprivileged simulation may also lack access to
+some APT configuration. A preview is informational and is not an approval
+token or a guarantee of the eventual transaction.
+
+`apt-get --no-remove` documents that it aborts when its plan includes package
+removal. It is an important independent guard for the real APT invocation,
+but it does not ensure the remaining actions match the approved preview.
+The documented `--allow-downgrades` option controls whether APT prompts in
+certain situations; omitting it is not a general no-downgrade guarantee.
+Rejecting an older selected `.deb` also does not by itself prove the solver
+cannot downgrade another package. Avoid automatic yes and dangerous override
+options; account for inherited APT configuration and hooks.
+
+An isolated APT 3.2.1 / dpkg 1.23.7 simulation experiment using temporary
+package state and locally built fixture archives found:
+
+- A conflict caused a removal in the preview; `--no-remove` rejected it.
+- A downgrade was still present in a successful `--no-remove` simulation.
+- Adding a conflicting installed package after a clean preview changed the
+  subsequent plan; `--no-remove` rejected that changed removal plan.
+
+These are solver simulations, not real installations or proof for other APT
+versions. Repeat the isolated experiments with the command below; they do not
+modify the host package database.
+
+```sh
+python3 -m unittest discover -s tests -p test_apt_safety_experiments.py -v
+```
+
+APT also documents a `DPkg::Pre-Install-Pkgs` hook protocol with package
+actions, old/new versions and (in protocol version 3) architectures; a
+failing hook aborts. This is a **possible research path**, not a proven
+solution. Before relying on it, establish the exact transaction boundary,
+locking, complete action and archive identities, protocol/version support,
+ordering with other hooks, failure behavior, local-file immutability, and
+interactions with APT/dpkg configuration across supported distributions. A
+simulation output parser alone is not a substitute for enforcement.
+
+**Release gate:** do not implement an automated APT handoff until a tested
+mechanism can bind the approved artifact and complete transaction to the
+actual privileged operation, block all removals and downgrades, and abort on
+changed or unverifiable plans. Until then, Beacon may inspect and report but
+must not claim to enforce an installation plan.
+
+References: [apt-get(8)](https://manpages.debian.org/bookworm/apt/apt-get.8.en.html)
+and [apt.conf(5)](https://manpages.debian.org/bookworm/apt/apt.conf.5.en.html).
+
 ## Inspection examples
 
 - CloverEye: installed `clover-eye:amd64` 0.1.1; release v0.1.0 asset
