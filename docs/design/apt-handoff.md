@@ -155,12 +155,24 @@ Protocol v3 also includes APT's configuration space; a production hook must
 parse only required fields and never log the raw protocol, which could contain
 private configuration values.
 
+An additional ordering probe used an APT-configured hook to replace the
+archive, then appended a digest-checking hook to the `apt-get` command line.
+The configured hook ran first; the final verifier saw the changed bytes,
+rejected the transaction, and left the temporary dpkg status unchanged. APT's
+`apt.conf(5)` documents that command-line options are applied after config
+files and that `::` appends an item to a list. This suggests a way to retain
+configured hooks while adding a final verifier, rather than clearing or
+replacing the hook list. The probe covered one explicit `APT_CONFIG` hook and
+one local APT version only. It does not prove ordering across every config
+source, invocation path, or supported APT version, nor protect against an
+independent privileged process changing the archive after verification.
+
 This is encouraging but **not a proven enforcement solution**. The fixtures
 do not establish that the hook always contains the complete transaction in
 all solver and architecture cases, that all locks protect all relevant
 inputs, or that a failing hook reverses earlier side effects. Downloads and
 other hooks can run before it, and hooks can run after it. We have not proved
-safe archive ownership and immutability, control of hook order while
+safe archive ownership and immutability, complete control of hook order while
 preserving system integrations, fallback protocols, configuration handling,
 dependency resolution, removal and multiarch cases, partial failures, or
 behavior on every supported version. The fixture policy parser is test code,

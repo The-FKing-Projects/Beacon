@@ -1,5 +1,6 @@
 """Opt-in real dpkg experiments in a rootless, read-only-host namespace."""
 
+import hashlib
 import os
 from pathlib import Path
 import shutil
@@ -233,6 +234,67 @@ class AptHookExperiments(unittest.TestCase):
         status = (self.root / "var/lib/dpkg/status").read_text()
         self.assertIn("Version: 9.0", status)
         self.assertNotIn("Version: 1.0", status)
+
+    def test_command_line_verifier_can_reject_archive_changed_by_configured_hook(self):
+        approved_digest = hashlib.sha256(self.archive.read_bytes()).hexdigest()
+        replacement_dir = self.base / "replacement/DEBIAN"
+        replacement_dir.mkdir(parents=True)
+        (replacement_dir / "control").write_text(
+            "Package: beacon-hook-fixture\nVersion: 9.0\nArchitecture: amd64\n"
+            "Maintainer: Test <test@example.test>\nDescription: Replacement fixture\n"
+        )
+        replacement = self.base / "replacement.deb"
+        subprocess.run(["dpkg-deb", "--build", str(self.base / "replacement"), str(replacement)],
+                       capture_output=True, check=True)
+        mutator = self.base / "configured-mutator"
+        mutator.write_text(
+            "#!/bin/sh\n"
+            "cat >/dev/null\n"
+            f"cp '{replacement}' '{self.archive}'\n"
+        )
+        mutator.chmod(0o755)
+        (self.base / "apt.conf").write_text(
+            f'Dir::Etc::parts "{self.base}/empty";\n'
+            'Dir::Etc::main "/dev/null";\n'
+            f'DPkg::Pre-Install-Pkgs {{ "{mutator}"; }};\n'
+            f'DPkg::Tools::options::{mutator}::Version "3";\n'
+        )
+        verifier = self.base / "final-verifier"
+        verifier.write_text(
+            f"#!{sys.executable}\n"
+            "import hashlib\n"
+            "from pathlib import Path\n"
+            "import sys\n"
+            f"expected = {approved_digest!r}\n"
+            f"result = Path({str(self.base / 'final-verifier-result')!r})\n"
+            "data = sys.stdin.read()\n"
+            "actions = data.split('\\n\\n', 1)[-1]\n"
+            "archives = [field for line in actions.splitlines() for field in line.split() "
+            "if field.endswith('.deb')]\n"
+            "accepted = bool(archives) and all(\n"
+            "    hashlib.sha256(Path(path).read_bytes()).hexdigest() == expected\n"
+            "    for path in archives\n"
+            ")\n"
+            "result.write_text('accepted' if accepted else 'rejected')\n"
+            "sys.exit(0 if accepted else 78)\n"
+        )
+        verifier.chmod(0o755)
+
+        result = self.install(0, additional_hooks=[verifier])
+
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual((self.base / "final-verifier-result").read_text(), "rejected")
+        observed = (self.base / "hook-input").read_text()
+        self.assertIn(" < 1.0 amd64", observed)
+        self.assertIn(str(self.archive), observed)
+        self.assertEqual(subprocess.run(
+            ["dpkg-deb", "-f", str(self.archive), "Version"],
+            capture_output=True, text=True, check=True,
+        ).stdout.strip(), "9.0")
+        self.assertNotIn(
+            "Package: beacon-hook-fixture",
+            (self.root / "var/lib/dpkg/status").read_text(),
+        )
 
     def test_hook_protocol_includes_solver_removal_action(self):
         conflict = (
