@@ -112,12 +112,47 @@ python3 -m unittest discover -s tests -p test_apt_safety_experiments.py -v
 
 APT also documents a `DPkg::Pre-Install-Pkgs` hook protocol with package
 actions, old/new versions and (in protocol version 3) architectures; a
-failing hook aborts. This is a **possible research path**, not a proven
-solution. Before relying on it, establish the exact transaction boundary,
-locking, complete action and archive identities, protocol/version support,
-ordering with other hooks, failure behavior, local-file immutability, and
-interactions with APT/dpkg configuration across supported distributions. A
-simulation output parser alone is not a substitute for enforcement.
+failing hook aborts.
+
+### Isolated real-transaction experiments
+
+The opt-in experiments in `tests/test_apt_hook_experiments.py` run real APT and
+dpkg against a temporary dpkg root inside a rootless bubblewrap namespace. The
+host filesystem is read-only except the test's temporary directory; package
+fixtures have no maintainer scripts or payload, APT configuration and state are
+isolated, and the namespace has no network. These are not host installations.
+The experiments were run on amd64 using Ubuntu 26.04.1 (APT 3.2.1 / dpkg
+1.23.7), Debian 12 container (APT 2.6.2 / dpkg 1.21.23), and Ubuntu 24.04
+container (APT 2.8.3 / dpkg 1.22.6).
+
+On each tested version, protocol v3 was delivered; a failing hook aborted a
+new install and left the temporary dpkg status unchanged; a successful hook
+allowed a real fixture install into the temporary root. The hook saw the old
+and new version, architecture, and direction for a fixture upgrade and a
+downgrade; rejecting it left the installed version unchanged. In a separate
+two-package fixture, the hook received both archive paths before either package
+was installed. The downgrade test uses `--allow-downgrades` **only within the
+isolated experiment** to demonstrate the hook's visibility; it is not a
+proposed production option.
+
+This is encouraging but **not a proven enforcement solution**. The fixtures
+do not establish that the hook always contains the complete transaction, that
+all locks protect all relevant inputs, or that a failing hook reverses earlier
+side effects. Downloads and other hooks can run before it. We have not proved
+safe archive ownership and immutability, hook ordering, fallback protocols,
+configuration handling, dependency resolution, removal and multiarch cases,
+partial failures, or behavior on every supported version. A parser for
+simulation output is not a substitute for enforcement.
+
+To repeat the experiments on an amd64 system with bubblewrap, user namespaces,
+APT, dpkg, and Python available:
+
+```sh
+BEACON_RUN_APT_HOOK_EXPERIMENTS=1 python3 -m unittest discover -s tests -p test_apt_hook_experiments.py -v
+```
+
+They are skipped by default and fail rather than falling back to an
+unisolated install if namespace setup fails.
 
 **Release gate:** do not implement an automated APT handoff until a tested
 mechanism can bind the approved artifact and complete transaction to the
