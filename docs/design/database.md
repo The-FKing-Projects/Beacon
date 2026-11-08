@@ -2,9 +2,11 @@
 
 ## Status and scope
 
-This is the proposed MVP design for issue #4; it is not
-implemented yet. Beacon currently inspects packages but does not persist
-discovery or upstream matches.
+This is the broader proposed MVP design for issue #4. Beacon now implements a
+smaller manual GitHub tracking store, but the schema and discovery persistence
+described below are not implemented. The current store records a package name
+and architecture and one explicitly confirmed GitHub repository name and ID;
+it does not record candidate evidence, rejected decisions, or scan snapshots.
 
 The store keeps the latest successful package observation, proposed upstream
 repositories, and explicit user decisions. Package provenance and upstream
@@ -27,9 +29,12 @@ empty. Follow the XDG rule that configured paths must be absolute; reject an
 invalid relative path with a clear error. No system-wide store, credentials,
 package contents, or update automation is included in this design.
 
-## Proposed version 1 schema
+## Proposed expanded schema
 
-The schema below is a design contract, not a migration or deployed database.
+The schema below is a future design, not the current deployed database. The
+manual tracking store uses `PRAGMA user_version = 1` with a `tracked_packages`
+table. Migrating it to this expanded schema will require a new version and a
+backup-preserving migration that retains existing confirmed associations.
 All timestamps are UTC RFC 3339 strings. JSON columns contain UTF-8 JSON text,
 validated by Beacon on read and write; they are not SQLite JSON-extension
 requirements. `PRAGMA foreign_keys = ON` is required on **every connection**.
@@ -146,9 +151,9 @@ future work.
 
 ## Schema versioning and migration
 
-Use `PRAGMA user_version = 1` for the first schema. On open, enable foreign
-keys, read `user_version`, and create version 1 only for a genuinely new,
-empty database. Reject unrecognized or newer versions without modifying them.
+On open, enable foreign keys, read `user_version`, and create the current
+manual-tracking version only for a genuinely new, empty database. Reject
+unrecognized or newer versions without modifying them.
 For a supported older version, back up the existing database with SQLite's
 backup API before migration, then apply sequential migrations and update
 `user_version` in a transaction. If a backup or migration fails, report the

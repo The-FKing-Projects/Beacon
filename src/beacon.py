@@ -7,6 +7,8 @@ import subprocess
 import sys
 from urllib.parse import urlparse
 
+import tracking
+
 
 # =================================
 # UI FUNCTIONS
@@ -32,6 +34,9 @@ def help_menu():
     print("    --repos      Show repository inventory.")
     print("    --clean      Show configuration remains.")
     print("    --local      Show locally installed packages.")
+    print("    --track <package> <owner/repo>  Confirm a GitHub upstream.")
+    print("    --check <package>              Check its latest GitHub release.")
+    print("    --tracked                      List confirmed associations.")
     print()
     print("Examples:")
     print("    beacon.py floorp")
@@ -554,6 +559,24 @@ def local_summary():
 # =================================
 
 def main():
+
+    if len(sys.argv) > 1 and sys.argv[1] in ("--track", "--check", "--tracked"):
+        command = sys.argv[1]
+        expected = {"--track": 4, "--check": 3, "--tracked": 2}[command]
+        if len(sys.argv) != expected:
+            print(f"Invalid arguments for {command}; see --help.", file=sys.stderr)
+            sys.exit(1)
+        try:
+            if command == "--track":
+                tracking.track(sys.argv[2], sys.argv[3])
+            elif command == "--check":
+                tracking.check(sys.argv[2])
+            else:
+                tracking.list_tracked()
+        except (tracking.TrackingError, tracking.sqlite3.Error) as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            sys.exit(1)
+        return
 
     if len(sys.argv) != 2:
         print("Usage: beacon.py <package>")

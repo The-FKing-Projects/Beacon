@@ -5,9 +5,9 @@ no configured repository or built-in updater. It investigates where an
 installed package might have come from, helps users identify its upstream
 project, and aims to track upstream releases.
 
-The initial focus is Debian and Ubuntu. Beacon is at an early stage: discovery
-and source classification work today, while upstream matching, persistent
-tracking, release checks, and update preparation are not implemented yet.
+The initial focus is Debian and Ubuntu. Beacon is at an early stage: discovery,
+source classification, and manually confirmed GitHub release tracking work
+today. Automatic upstream matching and update preparation are not implemented.
 
 ## Current Features
 
@@ -18,7 +18,32 @@ tracking, release checks, and update preparation are not implemented yet.
 - Repository inventory (`--repos`)
 - Configuration-remains inventory (`--clean`)
 - Local package inventory (`--local`)
+- Manually confirmed GitHub associations and latest stable release checks
 - Automated SemVer tags and GitHub Releases for qualifying merged pull requests
+
+## Track a GitHub upstream
+
+```bash
+python3 src/beacon.py --local
+python3 src/beacon.py <package>
+python3 src/beacon.py --track <package> <owner/repository>
+python3 src/beacon.py --tracked
+python3 src/beacon.py --check <package>
+```
+
+Verify the repository is the package's upstream before confirming it. Beacon
+does not determine that relationship for you. The package must be installed;
+specify `package:architecture` if more than one architecture is installed.
+Associations are saved per user under `$XDG_STATE_HOME/beacon/tracking.sqlite3`
+(default `~/.local/state/beacon/tracking.sqlite3`). Re-running `--track`
+requires confirmation before replacing an association.
+
+Checks query the public GitHub API without authentication and show the latest
+published stable release, not necessarily a compatible `.deb`. Network errors,
+rate limits, unavailable releases, and changed repository identities are
+reported. Version comparison is limited to three-component numeric versions
+with an optional `v` prefix; Debian revisions and other tags are reported as
+unknown. Beacon does not download or install updates.
 
 ## Direction
 
@@ -70,6 +95,6 @@ for the required repository settings.
 
 - Implement upstream matching and explicit confirmation for standalone package
   candidates.
-- Implement local tracking and release comparison for one supported upstream.
-- Validate the end-to-end workflow against a real standalone `.deb`.
+- Validate the end-to-end workflow against real standalone `.deb` packages and
+  expand version comparison only where it is reliable.
 - Design safe update preparation and an APT handoff after tracking works.
