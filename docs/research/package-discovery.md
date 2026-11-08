@@ -114,6 +114,7 @@ APT history should be considered supplementary evidence rather than a primary so
 - #6 Investigate package state detection
 - #11 Research source classification heuristics
 - #3 Research GitHub repository matching (`github-repository-matching.md`)
+- [Software discovery outside dpkg](non-dpkg-discovery.md)
 
 ## Additional Findings
 
