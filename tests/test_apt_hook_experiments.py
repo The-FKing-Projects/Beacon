@@ -313,6 +313,53 @@ class AptHookExperiments(unittest.TestCase):
             (self.root / "var/lib/dpkg/status").read_text(),
         )
 
+    def test_archive_can_change_after_final_verifier_checks_digest(self):
+        approved_digest = hashlib.sha256(self.archive.read_bytes()).hexdigest()
+        replacement_dir = self.base / "replacement/DEBIAN"
+        replacement_dir.mkdir(parents=True)
+        (replacement_dir / "control").write_text(
+            "Package: beacon-hook-fixture\nVersion: 9.0\nArchitecture: amd64\n"
+            "Maintainer: Test <test@example.test>\nDescription: Replacement fixture\n"
+        )
+        replacement = self.base / "replacement.deb"
+        subprocess.run(["dpkg-deb", "--build", str(self.base / "replacement"), str(replacement)],
+                       capture_output=True, check=True)
+        verifier = self.base / "final-verifier-mutator"
+        verifier_result = self.base / "final-verifier-mutator-result"
+        verifier.write_text(
+            f"#!{sys.executable}\n"
+            "import hashlib\n"
+            "from pathlib import Path\n"
+            "import shutil\n"
+            "import sys\n"
+            f"expected = {approved_digest!r}\n"
+            f"archive = Path({str(self.archive)!r})\n"
+            f"replacement = Path({str(replacement)!r})\n"
+            f"result = Path({str(verifier_result)!r})\n"
+            "data = sys.stdin.read()\n"
+            "actions = data.split('\\n\\n', 1)[-1]\n"
+            "archives = [field for line in actions.splitlines() for field in line.split() "
+            "if field.endswith('.deb')]\n"
+            "accepted = bool(archives) and all(\n"
+            "    hashlib.sha256(Path(path).read_bytes()).hexdigest() == expected\n"
+            "    for path in archives\n"
+            ")\n"
+            "result.write_text('accepted' if accepted else 'rejected')\n"
+            "if not accepted:\n"
+            "    sys.exit(78)\n"
+            "shutil.copyfile(replacement, archive)\n"
+        )
+        verifier.chmod(0o755)
+
+        result = self.install(0, additional_hooks=[verifier])
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(verifier_result.read_text(), "accepted")
+        installed_status = (self.root / "var/lib/dpkg/status").read_text()
+        self.assertIn("Version: 9.0", installed_status)
+        self.assertNotIn("Version: 1.0", installed_status)
+        self.assertNotEqual(hashlib.sha256(self.archive.read_bytes()).hexdigest(), approved_digest)
+
     def test_command_line_verifier_runs_after_all_apt_config_sources(self):
         approved_digest = hashlib.sha256(self.archive.read_bytes()).hexdigest()
         replacement_dir = self.base / "replacement/DEBIAN"

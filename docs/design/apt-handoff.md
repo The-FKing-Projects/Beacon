@@ -171,17 +171,29 @@ ordering across every invocation path or supported APT version, nor protect
 against an independent privileged process changing the archive after
 verification.
 
+The final hook is not an atomic boundary with dpkg. A deterministic fixture
+had the final verifier hash the approved archive successfully, then replace
+the archive before returning success. APT proceeded and dpkg installed the
+replacement version on all three tested APT versions. This models the
+post-verification race directly: a digest check only describes the bytes read
+at check time. APT's hook protocol passes archive paths, not an already-open
+file descriptor that binds the verified bytes to dpkg's later read. A
+concurrent process with permission to modify the archive can create the same
+gap, although protecting against a malicious privileged administrator is
+outside any ordinary package transaction's trust boundary.
+
 This is encouraging but **not a proven enforcement solution**. The fixtures
 do not establish that the hook always contains the complete transaction in
 all solver and architecture cases, that all locks protect all relevant
 inputs, or that a failing hook reverses earlier side effects. Downloads and
 other hooks can run before it, and hooks can run after it. We have not proved
-safe archive ownership and immutability, complete control of hook order while
-preserving system integrations, fallback protocols, configuration handling,
-dependency resolution, removal and multiarch cases, partial failures, or
-behavior on every supported version. The fixture policy parser is test code,
-not a production transaction verifier. A parser for simulation output is not
-a substitute for enforcement.
+an atomic binding between the bytes checked by the final hook and dpkg's read,
+safe archive ownership and immutability against other privileged processes,
+complete control of hook order while preserving system integrations, fallback
+protocols, configuration handling, dependency resolution, removal and
+multiarch cases, partial failures, or behavior on every supported version.
+The fixture policy parser is test code, not a production transaction
+verifier. A parser for simulation output is not a substitute for enforcement.
 
 To repeat the experiments on an amd64 system with bubblewrap, user namespaces,
 APT, dpkg, and Python available:
