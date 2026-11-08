@@ -143,9 +143,12 @@ identity; do not let them outweigh stronger provenance.
 - Record the evidence source, observed value, lookup time, canonical repository
   URL/ID, score tier, and any fork/archive flags so a user can audit or correct
   the result.
-- Ask for confirmation before persisting a low-confidence association or using
-  it for release tracking. Never use a suggested match to install software,
-  change package sources, or run repository-provided code.
+- Ask for confirmation before treating a suggestion as an approved association
+  or using it for release tracking. Matching must not change package sources
+  or run repository-provided code. Never use an unconfirmed suggestion to
+  install software. A possible future `.deb` handoff to APT requires
+  independent package and source verification; a matching score alone is not
+  sufficient.
 
 ## Recommendation
 
