@@ -155,17 +155,21 @@ Protocol v3 also includes APT's configuration space; a production hook must
 parse only required fields and never log the raw protocol, which could contain
 private configuration values.
 
-An additional ordering probe used an APT-configured hook to replace the
-archive, then appended a digest-checking hook to the `apt-get` command line.
-The configured hook ran first; the final verifier saw the changed bytes,
-rejected the transaction, and left the temporary dpkg status unchanged. APT's
-`apt.conf(5)` documents that command-line options are applied after config
-files and that `::` appends an item to a list. This suggests a way to retain
-configured hooks while adding a final verifier, rather than clearing or
-replacing the hook list. The probe covered one explicit `APT_CONFIG` hook and
-one local APT version only. It does not prove ordering across every config
-source, invocation path, or supported APT version, nor protect against an
-independent privileged process changing the archive after verification.
+An additional ordering probe configured hooks in the `APT_CONFIG` file, an
+APT config fragment, and the main config file. The `APT_CONFIG` hook replaced
+the archive; all three hooks ran in configuration order, then a digest-checking
+hook appended to the `apt-get` command line rejected the changed bytes before
+dpkg, leaving the temporary status unchanged. APT's `apt.conf(5)` documents
+that command-line options are applied after config files and that `::` appends
+an item to a list. This suggests a way to retain hooks from these config
+sources while adding a final verifier, rather than clearing or replacing the
+hook list. The probe used one local APT version and a controlled configuration;
+the same configuration-chain experiment also passed on Debian 12 (APT 2.6.2 /
+dpkg 1.21.23) and Ubuntu 24.04 (APT 2.8.3 / dpkg 1.22.6), in addition to the
+local Ubuntu environment (APT 3.2.1 / dpkg 1.23.7). This does not prove
+ordering across every invocation path or supported APT version, nor protect
+against an independent privileged process changing the archive after
+verification.
 
 This is encouraging but **not a proven enforcement solution**. The fixtures
 do not establish that the hook always contains the complete transaction in
