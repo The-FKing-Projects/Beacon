@@ -8,6 +8,7 @@ import sys
 from urllib.parse import urlparse
 
 import tracking
+import suggestions
 
 
 # =================================
@@ -35,6 +36,7 @@ def help_menu():
     print("    --clean      Show configuration remains.")
     print("    --local      Show locally installed packages.")
     print("    --track <package> <owner/repo>  Confirm a GitHub upstream.")
+    print("    --suggest <package>            Suggest GitHub upstreams.")
     print("    --check <package>              Check its latest GitHub release.")
     print("    --tracked                      List confirmed associations.")
     print()
@@ -560,15 +562,17 @@ def local_summary():
 
 def main():
 
-    if len(sys.argv) > 1 and sys.argv[1] in ("--track", "--check", "--tracked"):
+    if len(sys.argv) > 1 and sys.argv[1] in ("--track", "--check", "--tracked", "--suggest"):
         command = sys.argv[1]
-        expected = {"--track": 4, "--check": 3, "--tracked": 2}[command]
+        expected = {"--track": 4, "--check": 3, "--tracked": 2, "--suggest": 3}[command]
         if len(sys.argv) != expected:
             print(f"Invalid arguments for {command}; see --help.", file=sys.stderr)
             sys.exit(1)
         try:
             if command == "--track":
                 tracking.track(sys.argv[2], sys.argv[3])
+            elif command == "--suggest":
+                suggestions.suggest(sys.argv[2])
             elif command == "--check":
                 tracking.check(sys.argv[2])
             else:
