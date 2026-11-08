@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-VERSION = "0.1.2"
+VERSION = "0.2.0"
 
 import os
 import subprocess
