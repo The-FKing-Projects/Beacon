@@ -6,8 +6,9 @@ installed package might have come from, helps users identify its upstream
 project, and aims to track upstream releases.
 
 The initial focus is Debian and Ubuntu. Beacon is at an early stage: discovery,
-source classification, and manually confirmed GitHub release tracking work
-today. Automatic upstream matching and update preparation are not implemented.
+source classification, GitHub upstream suggestions, and manually confirmed
+release tracking work today. Automatic upstream approval and update preparation
+are not implemented.
 
 ## Current Features
 
@@ -18,6 +19,7 @@ today. Automatic upstream matching and update preparation are not implemented.
 - Repository inventory (`--repos`)
 - Configuration-remains inventory (`--clean`)
 - Local package inventory (`--local`)
+- Read-only GitHub upstream suggestions (`--suggest`)
 - Manually confirmed GitHub associations, release checks, and `.deb` asset suggestions
 - Automated SemVer tags and GitHub Releases for qualifying merged pull requests
 
@@ -26,13 +28,18 @@ today. Automatic upstream matching and update preparation are not implemented.
 ```bash
 python3 src/beacon.py --local
 python3 src/beacon.py <package>
+python3 src/beacon.py --suggest <package>
 python3 src/beacon.py --track <package> <owner/repository>
 python3 src/beacon.py --tracked
 python3 src/beacon.py --check <package>
 ```
 
 Verify the repository is the package's upstream before confirming it. Beacon
-does not determine that relationship for you. The package must be installed;
+does not determine that relationship for you. `--suggest` checks an exact
+GitHub repository homepage when present and searches the first page of GitHub
+repository names. It presents evidence, fork and archive status, and other
+results without saving or approving a match. Search results may be incomplete
+or unrelated; verify the project independently. The package must be installed;
 specify `package:architecture` if more than one architecture is installed.
 Associations are saved per user under `$XDG_STATE_HOME/beacon/tracking.sqlite3`
 (default `~/.local/state/beacon/tracking.sqlite3`). Re-running `--track`
@@ -97,8 +104,7 @@ for the required repository settings.
 
 ## Next steps
 
-- Implement upstream matching and explicit confirmation for standalone package
-  candidates.
+- Improve upstream suggestions with additional evidence and real-world cases.
 - Validate the end-to-end workflow against real standalone `.deb` packages and
   expand version comparison only where it is reliable.
 - Design safe update preparation and an APT handoff after tracking works.
