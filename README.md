@@ -7,8 +7,8 @@ project, and aims to track upstream releases.
 
 The initial focus is Debian and Ubuntu. Beacon is at an early stage: discovery,
 source classification, GitHub upstream suggestions, and manually confirmed
-release tracking work today. Automatic upstream approval and update preparation
-are not implemented.
+release tracking work today. Beacon can inspect a user-selected release asset;
+automatic upstream approval and installation are not implemented.
 
 ## Current Features
 
@@ -21,6 +21,7 @@ are not implemented.
 - Local package inventory (`--local`)
 - Read-only GitHub upstream suggestions (`--suggest`)
 - Manually confirmed GitHub associations, release checks, and `.deb` asset suggestions
+- Temporary inspection of a user-selected GitHub `.deb` asset (`--inspect`)
 - Automated SemVer tags and GitHub Releases for qualifying merged pull requests
 
 ## Track a GitHub upstream
@@ -32,6 +33,7 @@ python3 src/beacon.py --suggest <package>
 python3 src/beacon.py --track <package> <owner/repository>
 python3 src/beacon.py --tracked
 python3 src/beacon.py --check <package>
+python3 src/beacon.py --inspect <package> <exact-asset-filename.deb>
 ```
 
 Verify the repository is the package's upstream before confirming it. Beacon
@@ -49,12 +51,21 @@ Checks query the public GitHub API without authentication and show the latest
 published stable release and its `.deb` assets. Beacon suggests likely assets
 when the filename resembles the installed package name and specifies a
 matching architecture (or `all`); it also shows other `.deb` assets for manual
-review and flags multiple likely candidates. Filenames are only hints: Beacon
-does not verify asset contents, compatibility, package identity, or integrity.
+review and flags multiple likely candidates. Filenames are only hints: this
+check does not verify asset contents, compatibility, package identity, or integrity.
 Network errors, rate limits, unavailable releases, and changed repository
 identities are reported. Version comparison is limited to three-component
 numeric versions with an optional `v` prefix; Debian revisions and other tags
-are reported as unknown. Beacon does not download or install updates.
+are reported as unknown.
+
+`--inspect` downloads the exact named asset from the tracked repository's
+latest stable release into a temporary directory, compares its package name,
+architecture, and Debian version to the installed package, and then removes the
+download. Downloads are limited to 512 MiB. If the release has a `SHA256SUMS`
+asset, Beacon checks an exact filename entry; a missing entry or checksum file
+is reported, and a mismatch stops inspection. The checksum is not authenticated
+and does not prove authenticity. The command does not check dependencies or
+execute package maintainer scripts, and never installs a package.
 
 ## Direction
 
