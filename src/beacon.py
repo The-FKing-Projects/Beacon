@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 
 import tracking
 import suggestions
+import inspection
 
 
 # =================================
@@ -38,6 +39,7 @@ def help_menu():
     print("    --track <package> <owner/repo>  Confirm a GitHub upstream.")
     print("    --suggest <package>            Suggest GitHub upstreams.")
     print("    --check <package>              Check its latest GitHub release.")
+    print("    --inspect <package> <asset.deb> Inspect a selected release asset.")
     print("    --tracked                      List confirmed associations.")
     print()
     print("Examples:")
@@ -562,22 +564,24 @@ def local_summary():
 
 def main():
 
-    if len(sys.argv) > 1 and sys.argv[1] in ("--track", "--check", "--tracked", "--suggest"):
+    if len(sys.argv) > 1 and sys.argv[1] in ("--track", "--check", "--tracked", "--suggest", "--inspect"):
         command = sys.argv[1]
-        expected = {"--track": 4, "--check": 3, "--tracked": 2, "--suggest": 3}[command]
+        expected = {"--track": 4, "--check": 3, "--tracked": 2, "--suggest": 3, "--inspect": 4}[command]
         if len(sys.argv) != expected:
             print(f"Invalid arguments for {command}; see --help.", file=sys.stderr)
             sys.exit(1)
         try:
             if command == "--track":
                 tracking.track(sys.argv[2], sys.argv[3])
+            elif command == "--inspect":
+                inspection.inspect(sys.argv[2], sys.argv[3])
             elif command == "--suggest":
                 suggestions.suggest(sys.argv[2])
             elif command == "--check":
                 tracking.check(sys.argv[2])
             else:
                 tracking.list_tracked()
-        except (tracking.TrackingError, tracking.sqlite3.Error) as exc:
+        except (tracking.TrackingError, tracking.sqlite3.Error, OSError) as exc:
             print(f"Error: {exc}", file=sys.stderr)
             sys.exit(1)
         return
