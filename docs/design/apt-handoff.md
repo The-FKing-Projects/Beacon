@@ -131,18 +131,41 @@ allowed a real fixture install into the temporary root. The hook saw the old
 and new version, architecture, and direction for a fixture upgrade and a
 downgrade; rejecting it left the installed version unchanged. In a separate
 two-package fixture, the hook received both archive paths before either package
-was installed. The downgrade test uses `--allow-downgrades` **only within the
-isolated experiment** to demonstrate the hook's visibility; it is not a
-proposed production option.
+was installed. A `Pre-Depends` fixture showed one hook invocation containing
+both the dependency and dependent package actions; rejecting it left both
+uninstalled. With `--no-remove` omitted in a fixture only, the hook saw the
+solver's `**REMOVE**` action, rejected it, and left the dpkg status unchanged.
+The fixture policy hook also rejected both forbidden action types when APT was
+invoked without `--no-remove` and, for the downgrade experiment only,
+`--allow-downgrades`. Those flags were used **only within the isolated
+experiments** to demonstrate hook enforcement; they are not proposed
+production options.
+
+A separate two-hook experiment exposed an artifact-integrity limitation: the
+first (observer) hook saw the selected version-1.0 local archive; a later
+configured hook replaced its path with a version-9.0 archive, and dpkg installed
+version 9.0. Thus the transaction list and archive path observed by one hook
+do not bind the bytes ultimately read by dpkg if a later hook can mutate that
+path. APT hooks run with package-manager privilege; this experiment is not a
+defense against a malicious system administrator. It does show that a safe
+design must control hook ordering and archive immutability, or revalidate at a
+trusted final boundary, and must define which privileged system hooks it
+preserves. Never assume a hook runs last merely because Beacon configured one.
+Protocol v3 also includes APT's configuration space; a production hook must
+parse only required fields and never log the raw protocol, which could contain
+private configuration values.
 
 This is encouraging but **not a proven enforcement solution**. The fixtures
-do not establish that the hook always contains the complete transaction, that
-all locks protect all relevant inputs, or that a failing hook reverses earlier
-side effects. Downloads and other hooks can run before it. We have not proved
-safe archive ownership and immutability, hook ordering, fallback protocols,
-configuration handling, dependency resolution, removal and multiarch cases,
-partial failures, or behavior on every supported version. A parser for
-simulation output is not a substitute for enforcement.
+do not establish that the hook always contains the complete transaction in
+all solver and architecture cases, that all locks protect all relevant
+inputs, or that a failing hook reverses earlier side effects. Downloads and
+other hooks can run before it, and hooks can run after it. We have not proved
+safe archive ownership and immutability, control of hook order while
+preserving system integrations, fallback protocols, configuration handling,
+dependency resolution, removal and multiarch cases, partial failures, or
+behavior on every supported version. The fixture policy parser is test code,
+not a production transaction verifier. A parser for simulation output is not
+a substitute for enforcement.
 
 To repeat the experiments on an amd64 system with bubblewrap, user namespaces,
 APT, dpkg, and Python available:
