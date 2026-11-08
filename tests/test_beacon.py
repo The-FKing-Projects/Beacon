@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from beacon import package_provenance
+from beacon import _source_for_repository_url, package_provenance
 
 
 class BeaconProvenanceConfidenceTest(unittest.TestCase):
@@ -21,6 +21,22 @@ class BeaconProvenanceConfidenceTest(unittest.TestCase):
             raise AssertionError(f"Unexpected command: {args}")
 
         return patch("beacon.subprocess.run", side_effect=fake_run)
+
+    def test_repository_host_classification_uses_domain_boundaries(self):
+        cases = {
+            "https://ppa.floorp.app/amd64": "PPA",
+            "https://ppa.launchpadcontent.net/owner/archive/ubuntu": "PPA",
+            "https://archive.ubuntu.com/ubuntu": "Ubuntu Repository",
+            "https://mirror.debian.org/debian": "Debian Repository",
+            "https://packages.example.test/repo": "Vendor Repository",
+            "https://notlaunchpad.example.test/repo": "Vendor Repository",
+            "https://ubuntu.com.example.test/repo": "Vendor Repository",
+            "https://debian.org.example.test/repo": "Vendor Repository",
+        }
+
+        for url, expected_source in cases.items():
+            with self.subTest(url=url):
+                self.assertEqual(_source_for_repository_url(url), expected_source)
 
     def test_ppa_url_provides_high_confidence_with_evidence(self):
         policy = """\

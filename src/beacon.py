@@ -161,7 +161,11 @@ def _policy_origins_for_version(output, selected_version):
 def _source_for_repository_url(url):
     host = (urlparse(url).hostname or "").lower()
 
-    if host.startswith("ppa.") or "launchpad" in host:
+    if (
+        host.startswith("ppa.")
+        or host == "launchpad.net"
+        or host.endswith((".launchpad.net", ".launchpadcontent.net"))
+    ):
         return "PPA"
 
     if host == "ubuntu.com" or host.endswith(".ubuntu.com"):
