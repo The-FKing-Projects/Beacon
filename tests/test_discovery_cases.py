@@ -92,6 +92,132 @@ discord-ptb:
                     self.assertEqual(provenance["source"], "Local .deb Candidate")
                     self.assertEqual(provenance["confidence"], "Medium")
 
+    def test_edge_and_brave_vendor_repository_policy_fixtures(self):
+        policies = {
+            "microsoft-edge-stable": """\
+microsoft-edge-stable:
+  Installed: 9.9.9-fixture
+  Candidate: 9.9.9-fixture
+  Version table:
+ *** 9.9.9-fixture 500
+        500 https://packages.microsoft.com/repos/edge stable/main amd64 Packages
+        100 /var/lib/dpkg/status
+""",
+            "brave-browser": """\
+brave-browser:
+  Installed: 9.9.9-fixture
+  Candidate: 9.9.9-fixture
+  Version table:
+ *** 9.9.9-fixture 500
+        500 https://brave-browser-apt-release.s3.brave.com stable/main amd64 Packages
+        100 /var/lib/dpkg/status
+""",
+        }
+
+        def fake_run(args, **kwargs):
+            if args[:2] == ["apt-cache", "policy"]:
+                return SimpleNamespace(stdout=policies[args[2]], stderr="")
+            raise AssertionError(f"Unexpected command: {args}")
+
+        with patch("beacon.subprocess.run", side_effect=fake_run):
+            for package in policies:
+                with self.subTest(package=package):
+                    provenance = package_provenance(package)
+
+                    self.assertEqual(provenance["source"], "Vendor Repository")
+                    self.assertEqual(provenance["confidence"], "High")
+                    self.assertIn("https://", provenance["evidence"][0])
+
+    def test_user_observed_vendor_repositories(self):
+        policies = {
+            "code-insiders": (
+                "1.146.0-1794014368",
+                "https://packages.microsoft.com/repos/code",
+            ),
+            "tailscale": (
+                "1.104.5",
+                "https://pkgs.tailscale.com/stable/ubuntu",
+            ),
+            "beekeeper-studio": (
+                "6.2.2",
+                "https://deb.beekeeperstudio.io",
+            ),
+        }
+
+        def fake_run(args, **kwargs):
+            if args[:2] == ["apt-cache", "policy"]:
+                package = args[2]
+                version, repository = policies[package]
+                policy = (
+                    f"{package}:\n"
+                    f"  Installed: {version}\n"
+                    f"  Candidate: {version}\n"
+                    "  Version table:\n"
+                    f" *** {version} 500\n"
+                    f"        500 {repository} stable/main amd64 Packages\n"
+                    "        100 /var/lib/dpkg/status\n"
+                )
+                return SimpleNamespace(stdout=policy, stderr="")
+            raise AssertionError(f"Unexpected command: {args}")
+
+        with patch("beacon.subprocess.run", side_effect=fake_run):
+            for package, (_, repository) in policies.items():
+                with self.subTest(package=package):
+                    provenance = package_provenance(package)
+
+                    self.assertEqual(provenance["source"], "Vendor Repository")
+                    self.assertEqual(provenance["confidence"], "High")
+                    self.assertIn(repository, provenance["evidence"][0])
+
+    def test_edge_and_brave_without_policy_records_are_unknown(self):
+        missing_packages = ("microsoft-edge-stable", "brave-browser")
+
+        def fake_run(args, **kwargs):
+            if args[:2] == ["apt-cache", "policy"]:
+                return SimpleNamespace(
+                    stdout="",
+                    stderr=f"N: Unable to locate package {args[2]}\n",
+                )
+            raise AssertionError(f"Unexpected command: {args}")
+
+        with patch("beacon.subprocess.run", side_effect=fake_run):
+            for package in missing_packages:
+                with self.subTest(package=package):
+                    provenance = package_provenance(package)
+                    self.assertEqual(provenance["source"], "Unknown")
+                    self.assertEqual(provenance["confidence"], "Low")
+
+    def test_installed_without_current_repository_is_not_proven_orphan(self):
+        policy = """\
+orphan-candidate:
+  Installed: 1.0
+  Candidate: 1.0
+  Version table:
+ *** 1.0 100
+        100 /var/lib/dpkg/status
+"""
+        installed = "orphan-candidate/now 1.0 amd64 [installed,local]\n"
+
+        def fake_run(args, **kwargs):
+            if args[:2] == ["dpkg", "-l"]:
+                return SimpleNamespace(
+                    stdout="ii  orphan-candidate 1.0 amd64 Example package\n",
+                    stderr="",
+                )
+            if args[:2] == ["apt-cache", "policy"]:
+                return SimpleNamespace(stdout=policy, stderr="")
+            if args[:3] == ["apt", "list", "--installed"]:
+                return SimpleNamespace(stdout=installed, stderr="")
+            raise AssertionError(f"Unexpected command: {args}")
+
+        with patch("beacon.subprocess.run", side_effect=fake_run):
+            state = package_state("orphan-candidate")
+            provenance = package_provenance("orphan-candidate")
+
+        self.assertEqual(state, "Installed")
+        self.assertEqual(provenance["source"], "Local .deb Candidate")
+        self.assertIn("no repository origin", provenance["evidence"][0])
+
     def test_removed_heroic_is_configuration_remains(self):
         dpkg_output = "rc  heroic         2.22.0   amd64        Game launcher\n"
 
