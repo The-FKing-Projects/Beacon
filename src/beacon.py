@@ -27,7 +27,7 @@ def help_menu():
     print("Beacon Discovery Engine")
     print()
     print("Usage:")
-    print("    beacon.py <package>")
+    print("    beacon <package>")
     print()
     print("Options:")
     print("    --help       Show this help menu.")
@@ -43,13 +43,13 @@ def help_menu():
     print("    --tracked                      List confirmed associations.")
     print()
     print("Examples:")
-    print("    beacon.py floorp")
-    print("    beacon.py steam")
-    print("    beacon.py clover-eye")
-    print("    beacon.py --scan")
-    print("    beacon.py --repos")
-    print("    beacon.py --clean")
-    print("    beacon.py --local")
+    print("    beacon floorp")
+    print("    beacon steam")
+    print("    beacon clover-eye")
+    print("    beacon --scan")
+    print("    beacon --repos")
+    print("    beacon --clean")
+    print("    beacon --local")
 
 
 def state_icon(state):
@@ -587,7 +587,7 @@ def main():
         return
 
     if len(sys.argv) != 2:
-        print("Usage: beacon.py <package>")
+        print("Usage: beacon <package>")
         sys.exit(1)
 
     if sys.argv[1] == "--version":
