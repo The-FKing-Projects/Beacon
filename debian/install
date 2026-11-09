@@ -1,2 +1,2 @@
 src/*.py usr/lib/beacon
-debian/beacon usr/bin
+debian/bin/beacon usr/bin
