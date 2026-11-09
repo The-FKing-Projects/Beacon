@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+from datetime import datetime, timezone
 import json
 import os
 import re
@@ -9,6 +10,7 @@ from pathlib import Path
 
 
 VERSION_PATTERN = re.compile(r'^VERSION = "([^"]+)"$', re.MULTILINE)
+CHANGELOG_VERSION_PATTERN = re.compile(r"^(beacon \()[^)]+(\) .*; urgency=)", re.MULTILINE)
 CONVENTIONAL_TITLE_PATTERN = re.compile(
     r"^(?P<type>[a-z]+)(?:\([^)]*\))?(?P<breaking>!)?:\s+\S"
 )
@@ -54,6 +56,20 @@ def update_version_text(source, version):
     return updated
 
 
+def update_changelog_version_text(source, version, title, pr_number):
+    if CHANGELOG_VERSION_PATTERN.search(source) is None:
+        raise ValueError("Expected a Beacon Debian changelog entry")
+    if "\n" in title or "\r" in title:
+        raise ValueError("Release title cannot contain line breaks")
+    date = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S +0000")
+    entry = (
+        f"beacon ({version}-1) unstable; urgency=medium\n\n"
+        f"  * Release for pull request #{pr_number}: {title}.\n\n"
+        f" -- The FK'ing Projects <FiendKing04@gmail.com>  {date}\n\n"
+    )
+    return entry + source
+
+
 def find_tag_for_pr(pr_number):
     result = subprocess.run(
         ["git", "tag", "--list", "v[0-9]*"],
@@ -95,7 +111,7 @@ def write_outputs(outputs):
         print(json.dumps(outputs))
 
 
-def prepare_release(title, body, pr_number, version_file):
+def prepare_release(title, body, pr_number, version_file, changelog_file=None):
     existing_tag = find_tag_for_pr(pr_number)
     if existing_tag:
         write_outputs(
@@ -121,7 +137,19 @@ def prepare_release(title, body, pr_number, version_file):
         raise ValueError(f"No VERSION assignment found in {version_file}")
 
     version = bump_version(match.group(1), bump)
+    updated_changelog = None
+    changelog_path = Path(changelog_file) if changelog_file else None
+    if changelog_path is not None:
+        changelog = changelog_path.read_text(encoding="utf-8")
+        updated_changelog = update_changelog_version_text(
+            changelog,
+            version,
+            title,
+            pr_number,
+        )
     path.write_text(update_version_text(source, version), encoding="utf-8")
+    if changelog_path and updated_changelog is not None:
+        changelog_path.write_text(updated_changelog, encoding="utf-8")
     write_outputs(
         {
             "release": "true",
@@ -139,9 +167,16 @@ def main():
     parser.add_argument("--body", default="")
     parser.add_argument("--pr-number", required=True, type=int)
     parser.add_argument("--version-file", default="src/beacon.py")
+    parser.add_argument("--changelog-file")
     args = parser.parse_args()
 
-    prepare_release(args.title, args.body, args.pr_number, args.version_file)
+    prepare_release(
+        args.title,
+        args.body,
+        args.pr_number,
+        args.version_file,
+        args.changelog_file,
+    )
 
 
 if __name__ == "__main__":

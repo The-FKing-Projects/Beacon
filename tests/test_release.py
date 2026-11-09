@@ -10,6 +10,7 @@ from scripts.release import (
     bump_version,
     classify_bump,
     prepare_release,
+    update_changelog_version_text,
     update_version_text,
 )
 
@@ -55,6 +56,33 @@ class ReleaseVersioningTest(unittest.TestCase):
             'VERSION = "0.2.0"\nOTHER = "0.1.2"\n',
         )
 
+    def test_updates_debian_changelog_package_version(self):
+        source = (
+            "beacon (0.7.0-1) unstable; urgency=medium\n\n"
+            "  * Initial release.\n\n"
+            " -- The FK'ing Projects <FiendKing04@gmail.com>  "
+            "Mon, 09 Nov 2026 00:00:00 +0000\n"
+        )
+        self.assertIn(
+            "beacon (0.8.0-1) unstable; urgency=medium\n\n"
+            "  * Release for pull request #42: feat: add discovery.",
+            update_changelog_version_text(source, "0.8.0", "feat: add discovery", 42),
+        )
+
+    def test_rejects_changelog_without_beacon_entry(self):
+        with self.assertRaises(ValueError):
+            update_changelog_version_text(
+                "other (1.0-1) unstable; urgency=medium\n",
+                "0.8.0",
+                "feat: update",
+                42,
+            )
+
+    def test_rejects_multiline_release_title_in_changelog(self):
+        source = "beacon (0.7.0-1) unstable; urgency=medium\n"
+        with self.assertRaises(ValueError):
+            update_changelog_version_text(source, "0.8.0", "feat: update\n  * forged", 42)
+
     def test_rejects_malformed_or_unsupported_versions(self):
         with self.assertRaises(ValueError):
             bump_version("v0.1.2", "patch")
@@ -65,15 +93,34 @@ class ReleaseVersioningTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             version_file = Path(directory) / "beacon.py"
             version_file.write_text('VERSION = "0.1.2"\n', encoding="utf-8")
+            changelog_file = Path(directory) / "changelog"
+            changelog_file.write_text(
+                "beacon (0.1.2-1) unstable; urgency=medium\n",
+                encoding="utf-8",
+            )
             outputs = []
 
             with (
                 patch("scripts.release.find_tag_for_pr", return_value=None),
                 patch("scripts.release.write_outputs", side_effect=outputs.append),
             ):
-                prepare_release("feat: add discovery", "", 42, version_file)
+                prepare_release(
+                    "feat: add discovery",
+                    "",
+                    42,
+                    version_file,
+                    changelog_file,
+                )
 
             self.assertEqual(version_file.read_text(encoding="utf-8"), 'VERSION = "0.2.0"\n')
+            self.assertEqual(
+                changelog_file.read_text(encoding="utf-8").splitlines()[:3],
+                [
+                    "beacon (0.2.0-1) unstable; urgency=medium",
+                    "",
+                    "  * Release for pull request #42: feat: add discovery.",
+                ],
+            )
             self.assertEqual(
                 outputs,
                 [
