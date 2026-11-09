@@ -75,6 +75,16 @@ def name_evidence(package, repository):
     return 0, "returned by GitHub name search; no exact package-name match"
 
 
+def match_tier(rank):
+    tiers = {
+        3: "Very high: installed package homepage directly identifies this repository",
+        2: "High: package and repository names match",
+        1: "Low: similar names only",
+        0: "Candidate only: search result without independent identity evidence",
+    }
+    return tiers[rank]
+
+
 def suggest(package):
     name, architecture, _ = tracking.installed_package(package)
     homepage = package_homepage(name, architecture)
@@ -117,8 +127,17 @@ def suggest(package):
         print("No candidates found; this does not prove that no upstream exists.")
         return
     ordered = sorted(candidates.values(), key=lambda c: (-c["rank"], c["name"].lower()))
+    strongest_rank = ordered[0]["rank"]
+    strongest_matches = [candidate for candidate in ordered
+                         if candidate["rank"] == strongest_rank]
+    if strongest_rank > 0 and len(strongest_matches) > 1:
+        print(
+            "Warning: multiple repositories share the strongest match evidence; "
+            "no single upstream is identified."
+        )
     for candidate in ordered:
         print(f"\n  https://github.com/{candidate['name']}")
+        print(f"    Match: {match_tier(candidate['rank'])}")
         print(f"    Evidence: {'; '.join(candidate['evidence'])}")
         print(f"    Fork: {'yes' if candidate['fork'] else 'no'}; "
               f"archived: {'yes' if candidate['archived'] else 'no'}")

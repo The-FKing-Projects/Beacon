@@ -39,9 +39,12 @@ python3 src/beacon.py --inspect <package> <exact-asset-filename.deb>
 Verify the repository is the package's upstream before confirming it. Beacon
 does not determine that relationship for you. `--suggest` checks an exact
 GitHub repository homepage when present and searches the first page of GitHub
-repository names. It presents evidence, fork and archive status, and other
-results without saving or approving a match. Search results may be incomplete
-or unrelated; verify the project independently. The package must be installed;
+repository names. Each candidate is labeled as a direct homepage match, exact
+name match, similar name, or search-only result. If multiple repositories tie
+for the strongest nonzero evidence, Beacon warns that no single upstream is
+identified. It presents evidence, fork and archive status, and alternatives
+without saving or approving a match. Search results may be incomplete or
+unrelated; verify the project independently. The package must be installed;
 specify `package:architecture` if more than one architecture is installed.
 Associations are saved per user under `$XDG_STATE_HOME/beacon/tracking.sqlite3`
 (default `~/.local/state/beacon/tracking.sqlite3`). Re-running `--track`
