@@ -160,6 +160,28 @@ unchanged package metadata. Use the 100/90/75/50/25 tiers initially as
 conservative display bands, then validate them against a labeled set of true
 matches and false positives before enabling automatic associations.
 
+## Current `--suggest` behavior
+
+The current command resolves a package's exact HTTPS GitHub homepage when
+available and performs one repository-name search. It preserves candidates
+and labels evidence without saving or approving an association:
+
+| Display tier | Evidence used |
+| --- | --- |
+| Very high | Installed package homepage directly identifies the repository |
+| High | Package and repository names match after case and `-`/`_` normalization |
+| Low | Names match only after separators are removed |
+| Candidate only | Search returned the repository, but no independent identity signal matched |
+
+When multiple repositories tie for the strongest nonzero tier, `--suggest`
+warns that no single upstream is identified. Fork and archive flags are
+displayed as repository status, not as identity evidence. These labels
+intentionally are not numeric probabilities; a calibrated score is deferred
+until there is a labeled true/false-match set. Search is currently limited to
+package-name results and does not yet use display names, package descriptions,
+maintainer relationships, README search, or aliases. A search-only candidate
+is not treated as a match.
+
 ## References
 
 - [REST API endpoints for search](https://docs.github.com/en/rest/search/search?apiVersion=2022-11-28) — search endpoints, result and query limits, rate limits, and incomplete results.

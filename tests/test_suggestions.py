@@ -62,6 +62,7 @@ class SuggestionsTest(unittest.TestCase):
                         result.index("https://github.com/Other/app\n"))
         self.assertEqual(result.count("  https://github.com/Official/App\n"), 1)
         self.assertIn("installed package homepage", result)
+        self.assertIn("Match: Very high:", result)
         self.assertIn("Other/app", result)
         self.assertIn("Fork: yes; archived: yes", result)
         self.assertIn("incomplete search results", result)
@@ -73,6 +74,32 @@ class SuggestionsTest(unittest.TestCase):
         self.assertEqual(rank, 1)
         self.assertIn("similar", evidence)
         self.assertEqual(suggestions.name_evidence("clover_eye", "owner/clover-eye")[0], 2)
+
+    def test_match_tiers_distinguish_direct_exact_similar_and_search_only(self):
+        self.assertIn("homepage directly identifies", suggestions.match_tier(3))
+        self.assertIn("names match", suggestions.match_tier(2))
+        self.assertIn("similar names only", suggestions.match_tier(1))
+        self.assertIn("without independent identity evidence", suggestions.match_tier(0))
+
+    def test_multiple_exact_name_candidates_are_marked_ambiguous(self):
+        search = {
+            "items": [repo("Publisher/app", 1), repo("Community/app", 2)],
+            "total_count": 2,
+            "incomplete_results": False,
+        }
+        out = io.StringIO()
+        with patch("tracking.installed_package", return_value=("app", "amd64", "1.0.0")), \
+             patch("suggestions.package_homepage", return_value=""), \
+             patch("tracking.github_get", return_value=search), \
+             contextlib.redirect_stdout(out):
+            suggestions.suggest("app")
+
+        result = out.getvalue()
+        self.assertIn("multiple repositories share the strongest match evidence", result)
+        self.assertIn("no single upstream is identified", result)
+        self.assertEqual(result.count("Match: High:"), 2)
+        self.assertLess(result.index("https://github.com/Community/app"),
+                        result.index("https://github.com/Publisher/app"))
 
     def test_empty_and_malformed_search(self):
         with patch("tracking.installed_package", return_value=("app", "amd64", "1")), \
@@ -98,7 +125,7 @@ class SuggestionsTest(unittest.TestCase):
                 suggestions.suggest("app")
 
     def test_cli_wires_suggestions_without_tracking(self):
-        search = {"items": [repo("owner/app", 1)], "total_count": 1, "incomplete_results": False}
+        search = {"items": [repo("owner/app-tools", 1)], "total_count": 1, "incomplete_results": False}
         out = io.StringIO()
         with patch.object(sys, "argv", ["beacon.py", "--suggest", "app"]), \
              patch("tracking.installed_package", return_value=("app", "amd64", "1")), \
@@ -107,7 +134,8 @@ class SuggestionsTest(unittest.TestCase):
              patch("tracking.open_database", side_effect=AssertionError("unexpected write")), \
              contextlib.redirect_stdout(out):
             beacon.main()
-        self.assertIn("https://github.com/owner/app", out.getvalue())
+        self.assertIn("https://github.com/owner/app-tools", out.getvalue())
+        self.assertIn("Candidate only:", out.getvalue())
 
 
 if __name__ == "__main__":
