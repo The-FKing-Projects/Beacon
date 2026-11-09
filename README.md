@@ -27,14 +27,16 @@ automatic upstream approval and installation are not implemented.
 
 ## Track a GitHub upstream
 
+After installing Beacon's Debian package, use the `beacon` command:
+
 ```bash
-python3 src/beacon.py --local
-python3 src/beacon.py <package>
-python3 src/beacon.py --suggest <package>
-python3 src/beacon.py --track <package> <owner/repository>
-python3 src/beacon.py --tracked
-python3 src/beacon.py --check <package>
-python3 src/beacon.py --inspect <package> <exact-asset-filename.deb>
+beacon --local
+beacon <package>
+beacon --suggest <package>
+beacon --track <package> <owner/repository>
+beacon --tracked
+beacon --check <package>
+beacon --inspect <package> <exact-asset-filename.deb>
 ```
 
 Verify the repository is the package's upstream before confirming it. Beacon

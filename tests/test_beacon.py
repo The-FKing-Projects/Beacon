@@ -1,3 +1,5 @@
+from contextlib import redirect_stdout
+from io import StringIO
 import os
 import sys
 import unittest
@@ -6,10 +8,20 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from beacon import _source_for_repository_url, package_provenance
+from beacon import _source_for_repository_url, help_menu, package_provenance
 
 
 class BeaconProvenanceConfidenceTest(unittest.TestCase):
+    def test_help_uses_packaged_executable_name(self):
+        output = StringIO()
+        with redirect_stdout(output):
+            help_menu()
+
+        help_text = output.getvalue()
+        self.assertIn("Usage:\n    beacon <package>", help_text)
+        self.assertIn("    beacon --scan", help_text)
+        self.assertNotIn("beacon.py", help_text)
+
     def run_with_policy(self, policy_output, installed_output=""):
         def fake_run(args, **kwargs):
             if args[:2] == ["apt-cache", "policy"]:

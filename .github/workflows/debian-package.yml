@@ -31,6 +31,13 @@ jobs:
           package="../beacon_$(dpkg-parsechangelog -SVersion)_all.deb"
           dpkg-deb --info "$package"
           dpkg-deb --contents "$package"
-          mkdir package-root
-          dpkg-deb --extract "$package" package-root
-          python3 package-root/usr/lib/beacon/beacon.py --version
+          sudo apt install -y "$package"
+          beacon --version
+          help_output="$(beacon --help)"
+          printf '%s\n' "$help_output"
+          ! grep -Fq 'beacon.py' <<< "$help_output"
+          grep -Fq 'beacon --scan' <<< "$help_output"
+          beacon --scan
+          beacon --repos
+          beacon --clean
+          beacon --local
