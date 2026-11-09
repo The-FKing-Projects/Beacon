@@ -1,0 +1,15 @@
+Source: beacon
+Section: utils
+Priority: optional
+Maintainer: The FK'ing Projects <beacon@example.invalid>
+Build-Depends: debhelper-compat (= 13), dpkg-dev
+Standards-Version: 4.6.2
+Rules-Requires-Root: no
+
+Package: beacon
+Architecture: all
+Depends: ${misc:Depends}, apt, dpkg, python3 (>= 3.10)
+Description: discover software sources and track upstream releases
+ Beacon inspects installed Debian packages, explains possible source
+ provenance, suggests GitHub upstreams for manual review, and tracks
+ confirmed upstream releases. It does not install or update packages.

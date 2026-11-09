@@ -22,6 +22,7 @@ automatic upstream approval and installation are not implemented.
 - Read-only GitHub upstream suggestions (`--suggest`)
 - Manually confirmed GitHub associations, release checks, and `.deb` asset suggestions
 - Temporary inspection of a user-selected GitHub `.deb` asset (`--inspect`)
+- Debian package build metadata for installing Beacon itself
 - Automated SemVer tags and GitHub Releases for qualifying merged pull requests
 
 ## Track a GitHub upstream
@@ -72,6 +73,30 @@ the manifest can make them match. Only a file named `SHA256SUMS` with a
 supported exact-filename entry is checked; other checksum formats are not.
 The command does not check dependencies or
 execute package maintainer scripts, and never installs a package.
+
+## Build the Debian package
+
+The package installs Beacon's CLI and Python modules; it does not install or
+update other software, add APT sources, or activate APT hooks. Build it on a
+Debian- or Ubuntu-based system with the Debian packaging tools:
+
+```bash
+sudo apt install debhelper dpkg-dev
+dpkg-buildpackage -us -uc -b
+```
+
+The `.deb` is written to the parent directory. Inspect its metadata and file
+list before installing it:
+
+```bash
+PACKAGE="../beacon_$(dpkg-parsechangelog -SVersion)_all.deb"
+dpkg-deb --info "$PACKAGE"
+dpkg-deb --contents "$PACKAGE"
+```
+
+The package version in `debian/changelog` is synchronized with Beacon's
+automated release version. A Debian package build does not verify upstream
+release assets or make installing those assets safe.
 
 ## Direction
 

@@ -1,0 +1,36 @@
+name: Debian package
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/debian-package.yml"
+      - "debian/**"
+      - "src/**"
+      - "scripts/release.py"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Install Debian packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends debhelper dpkg-dev
+
+      - name: Build the binary package
+        run: dpkg-buildpackage -us -uc -b
+
+      - name: Inspect the package and smoke-test its CLI
+        run: |
+          package="../beacon_$(dpkg-parsechangelog -SVersion)_all.deb"
+          dpkg-deb --info "$package"
+          dpkg-deb --contents "$package"
+          mkdir package-root
+          dpkg-deb --extract "$package" package-root
+          python3 package-root/usr/lib/beacon/beacon.py --version
