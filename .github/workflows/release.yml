@@ -128,3 +128,44 @@ jobs:
           gh release create "$TAG" \
             --title "Beacon $TAG" \
             --notes "Automated release for #$PR_NUMBER: $PR_TITLE <!-- beacon-release-pr:$PR_NUMBER -->"
+
+      - name: Install Debian packaging tools
+        if: steps.plan.outputs.release == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential debhelper dpkg-dev
+
+      - name: Verify the Debian package version matches the release
+        if: steps.plan.outputs.release == 'true'
+        env:
+          TAG: ${{ steps.plan.outputs.tag }}
+        run: |
+          expected="${TAG#v}-1"
+          actual="$(dpkg-parsechangelog -SVersion)"
+          if [ "$actual" != "$expected" ]; then
+            echo "Release $TAG expects Debian version $expected, found $actual." >&2
+            exit 1
+          fi
+
+      - name: Build the binary package
+        if: steps.plan.outputs.release == 'true'
+        run: dpkg-buildpackage -us -uc -b
+
+      - name: Inspect the package and smoke-test its CLI
+        if: steps.plan.outputs.release == 'true'
+        run: |
+          package="../beacon_$(dpkg-parsechangelog -SVersion)_all.deb"
+          dpkg-deb --info "$package"
+          dpkg-deb --contents "$package"
+          mkdir package-root
+          dpkg-deb --extract "$package" package-root
+          python3 package-root/usr/lib/beacon/beacon.py --version
+
+      - name: Upload the package to the GitHub Release
+        if: steps.plan.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.plan.outputs.tag }}
+        run: |
+          package="../beacon_$(dpkg-parsechangelog -SVersion)_all.deb"
+          gh release upload "$TAG" "$package" --clobber
