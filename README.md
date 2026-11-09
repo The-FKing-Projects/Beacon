@@ -98,9 +98,9 @@ The package version in `debian/changelog` is synchronized with Beacon's
 automated release version. A Debian package build does not verify upstream
 release assets or make installing those assets safe.
 
-Published Beacon releases include a built `.deb` asset. To add or refresh the
-package for an existing release, run the **Publish Debian package** workflow
-with that release's tag.
+The release workflow builds, checks, and uploads a matching `.deb` for every
+automated release. To add or refresh the package for an existing release, run
+the **Publish Debian package** workflow with that release's tag.
 
 ## Direction
 
