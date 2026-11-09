@@ -31,7 +31,7 @@ jobs:
             echo "Expected a release tag in vMAJOR.MINOR.PATCH form." >&2
             exit 1
           fi
-          release_tag="$(gh release view "$INPUT_TAG" --json tagName --jq .tagName)"
+          release_tag="$(gh release view "$INPUT_TAG" --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)"
           if [ "$release_tag" != "$INPUT_TAG" ]; then
             echo "No GitHub Release found for $INPUT_TAG." >&2
             exit 1
