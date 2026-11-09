@@ -155,17 +155,45 @@ Protocol v3 also includes APT's configuration space; a production hook must
 parse only required fields and never log the raw protocol, which could contain
 private configuration values.
 
+An additional ordering probe configured hooks in the `APT_CONFIG` file, an
+APT config fragment, and the main config file. The `APT_CONFIG` hook replaced
+the archive; all three hooks ran in configuration order, then a digest-checking
+hook appended to the `apt-get` command line rejected the changed bytes before
+dpkg, leaving the temporary status unchanged. APT's `apt.conf(5)` documents
+that command-line options are applied after config files and that `::` appends
+an item to a list. This suggests a way to retain hooks from these config
+sources while adding a final verifier, rather than clearing or replacing the
+hook list. The probe used one local APT version and a controlled configuration;
+the same configuration-chain experiment also passed on Debian 12 (APT 2.6.2 /
+dpkg 1.21.23) and Ubuntu 24.04 (APT 2.8.3 / dpkg 1.22.6), in addition to the
+local Ubuntu environment (APT 3.2.1 / dpkg 1.23.7). This does not prove
+ordering across every invocation path or supported APT version, nor protect
+against an independent privileged process changing the archive after
+verification.
+
+The final hook is not an atomic boundary with dpkg. A deterministic fixture
+had the final verifier hash the approved archive successfully, then replace
+the archive before returning success. APT proceeded and dpkg installed the
+replacement version on all three tested APT versions. This models the
+post-verification race directly: a digest check only describes the bytes read
+at check time. APT's hook protocol passes archive paths, not an already-open
+file descriptor that binds the verified bytes to dpkg's later read. A
+concurrent process with permission to modify the archive can create the same
+gap, although protecting against a malicious privileged administrator is
+outside any ordinary package transaction's trust boundary.
+
 This is encouraging but **not a proven enforcement solution**. The fixtures
 do not establish that the hook always contains the complete transaction in
 all solver and architecture cases, that all locks protect all relevant
 inputs, or that a failing hook reverses earlier side effects. Downloads and
 other hooks can run before it, and hooks can run after it. We have not proved
-safe archive ownership and immutability, control of hook order while
-preserving system integrations, fallback protocols, configuration handling,
-dependency resolution, removal and multiarch cases, partial failures, or
-behavior on every supported version. The fixture policy parser is test code,
-not a production transaction verifier. A parser for simulation output is not
-a substitute for enforcement.
+an atomic binding between the bytes checked by the final hook and dpkg's read,
+safe archive ownership and immutability against other privileged processes,
+complete control of hook order while preserving system integrations, fallback
+protocols, configuration handling, dependency resolution, removal and
+multiarch cases, partial failures, or behavior on every supported version.
+The fixture policy parser is test code, not a production transaction
+verifier. A parser for simulation output is not a substitute for enforcement.
 
 To repeat the experiments on an amd64 system with bubblewrap, user namespaces,
 APT, dpkg, and Python available:
