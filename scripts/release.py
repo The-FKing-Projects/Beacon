@@ -65,7 +65,7 @@ def update_changelog_version_text(source, version, title, pr_number):
     entry = (
         f"beacon ({version}-1) unstable; urgency=medium\n\n"
         f"  * Release for pull request #{pr_number}: {title}.\n\n"
-        f" -- The FK'ing Projects <beacon@example.invalid>  {date}\n\n"
+        f" -- The FK'ing Projects <FiendKing04@gmail.com>  {date}\n\n"
     )
     return entry + source
 

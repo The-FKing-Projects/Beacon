@@ -60,7 +60,7 @@ class ReleaseVersioningTest(unittest.TestCase):
         source = (
             "beacon (0.7.0-1) unstable; urgency=medium\n\n"
             "  * Initial release.\n\n"
-            " -- The FK'ing Projects <beacon@example.invalid>  "
+            " -- The FK'ing Projects <FiendKing04@gmail.com>  "
             "Mon, 09 Nov 2026 00:00:00 +0000\n"
         )
         self.assertIn(

@@ -1,7 +1,7 @@
 Source: beacon
 Section: utils
 Priority: optional
-Maintainer: The FK'ing Projects <beacon@example.invalid>
+Maintainer: The FK'ing Projects <FiendKing04@gmail.com>
 Build-Depends: debhelper-compat (= 13), dpkg-dev
 Standards-Version: 4.6.2
 Rules-Requires-Root: no
