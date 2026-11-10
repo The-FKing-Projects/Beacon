@@ -103,6 +103,15 @@ class AptlyPublicationTest(unittest.TestCase):
             ["workflow_dispatch:"],
         )
 
+    def test_targets_existing_organization_runner_labels(self):
+        labels = WORKFLOW.read_text().split("    runs-on:\n", 1)[1].split(
+            "    timeout-minutes:", 1
+        )[0]
+        self.assertEqual(
+            [line.strip() for line in labels.splitlines()],
+            ["- self-hosted", "- Linux", "- X64", "- fkingprojects"],
+        )
+
     def test_rejects_untrusted_events_and_forks_before_download(self):
         contexts = [
             {"EVENT_NAME": event}

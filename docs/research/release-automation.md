@@ -104,10 +104,9 @@ or tunnel changes are needed.
 
 ### Server setup
 
-1. In the organization's **Settings → Actions → Runners**, register the Linux
-   runner `FK04-SERVER` with the custom label `fkingprojects-apt` (in addition
-   to the default `self-hosted`, `Linux`, and `X64` labels). Runner labels are
-   case-insensitive. Ensure its runner group grants this repository access;
+1. Use the existing organization runner `FK04-SERVER` with the
+   `self-hosted`, `Linux`, `X64`, and `fkingprojects` labels. No new runner or
+   label is required. Ensure its runner group grants this repository access;
    public repositories may require an explicit group setting.
 2. Run its service as `github-runner` with access through the `aptly` group to
    the existing aptly repository and signing key. Ensure its `HOME`, aptly
@@ -135,10 +134,14 @@ group access to trusted workflows where your GitHub plan supports it, protect
 `main` and workflow changes, and use an isolated host/account where practical.
 The publishing job itself does not check out or execute release-tag code and
 only runs from `main`, but these safeguards do not replace runner isolation.
-The runner label is routing, not an access-control boundary: other workflows
-must not target this runner, and runner groups should enforce that restriction
-where available. `FK04-SERVER` runs as a systemd service under `github-runner`,
-so publication does not depend on an open terminal.
+Runner labels are routing, not an access-control boundary: only trusted release
+publication workflows may target this runner, including in other organization
+repositories, and runner groups should enforce that restriction where
+available. These labels match any accessible Linux X64 self-hosted runner with
+the `fkingprojects` label, not a particular runner name; keep runner-group
+membership limited to appropriate publishing hosts. `FK04-SERVER` runs as a
+systemd service under `github-runner`, so publication does not depend on an
+open terminal.
 
 ### Retries and coordination
 
