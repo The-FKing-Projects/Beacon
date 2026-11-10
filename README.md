@@ -69,9 +69,11 @@ specify `package:architecture` if more than one architecture is installed.
 Associations are saved per user under `$XDG_STATE_HOME/beacon/tracking.sqlite3`
 (default `~/.local/state/beacon/tracking.sqlite3`). Re-running `--track`
 requires confirmation before replacing an association.
-Tracking, suggestions, release checks, and asset inspection limit each
-installed-package metadata query to 15 seconds. A timeout is reported as an
-error without changing saved associations; Beacon does not retry automatically.
+Package discovery, inventories, tracking, suggestions, release checks, and
+asset inspection limit each system metadata query to 15 seconds. A timeout or
+failed command is reported as an error instead of being presented as an
+unknown package/source; saved associations remain unchanged and commands are
+not retried automatically.
 
 `--untrack` shows the saved association and requires confirmation before
 removing it. It works offline and after the package has been uninstalled;

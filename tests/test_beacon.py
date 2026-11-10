@@ -1,14 +1,19 @@
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 import os
 import sys
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
+from subprocess import TimeoutExpired
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from beacon import _source_for_repository_url, help_menu, package_provenance
+from beacon import (
+    DiscoveryError, _source_for_repository_url, auto_installed_count,
+    config_remains_count, config_remains_packages, help_menu, installed_count,
+    main, package_exists, package_provenance, package_state,
+)
 
 
 class BeaconProvenanceConfidenceTest(unittest.TestCase):
@@ -25,10 +30,10 @@ class BeaconProvenanceConfidenceTest(unittest.TestCase):
     def run_with_policy(self, policy_output, installed_output=""):
         def fake_run(args, **kwargs):
             if args[:2] == ["apt-cache", "policy"]:
-                return SimpleNamespace(stdout=policy_output, stderr="")
+                return SimpleNamespace(stdout=policy_output, stderr="", returncode=0)
 
             if args[:3] == ["apt", "list", "--installed"]:
-                return SimpleNamespace(stdout=installed_output, stderr="")
+                return SimpleNamespace(stdout=installed_output, stderr="", returncode=0)
 
             raise AssertionError(f"Unexpected command: {args}")
 
@@ -49,6 +54,75 @@ class BeaconProvenanceConfidenceTest(unittest.TestCase):
         for url, expected_source in cases.items():
             with self.subTest(url=url):
                 self.assertEqual(_source_for_repository_url(url), expected_source)
+
+    def test_package_command_failures_and_timeouts_are_explicit(self):
+        cases = [
+            (SimpleNamespace(stdout="", stderr="APT unavailable", returncode=100),
+             "APT unavailable"),
+            (TimeoutExpired(["apt-cache", "policy", "app"], 15), "timed out"),
+            (FileNotFoundError("apt-cache"), "apt-cache"),
+        ]
+        for result, message in cases:
+            mocked = {"side_effect": result} if isinstance(result, BaseException) else {"return_value": result}
+            with self.subTest(result=result), patch("beacon.subprocess.run", **mocked):
+                with self.assertRaisesRegex(DiscoveryError, message):
+                    package_exists("app")
+
+    def test_package_command_timeout_is_bounded(self):
+        result = SimpleNamespace(
+            stdout="app:\n  Candidate: 1.2.3\n", stderr="", returncode=0,
+        )
+        with patch("beacon.subprocess.run", return_value=result) as command:
+            self.assertTrue(package_exists("app"))
+        self.assertEqual(command.call_args.kwargs["timeout"], 15)
+        self.assertFalse(command.call_args.kwargs.get("shell", False))
+
+    def test_inventory_uses_argument_lists_and_checked_output(self):
+        outputs = {
+            ("dpkg", "-l"): (
+                "Desired=Unknown/Install/Remove/Purge/Hold\n"
+                "||/ Name Version Architecture Description\n"
+                "ii  one 1 amd64 installed\n"
+                "ii  two 1 all installed\n"
+                "rc  old 1 amd64 config-remains\n"
+                "un  absent <none> <none> not-installed\n"
+            ),
+            ("apt-mark", "showauto"): "one\ntwo\n",
+        }
+
+        def fake_run(command, **kwargs):
+            self.assertIsInstance(command, list)
+            self.assertEqual(kwargs["timeout"], 15)
+            self.assertNotIn("shell", kwargs)
+            return SimpleNamespace(
+                stdout=outputs[tuple(command)], stderr="", returncode=0,
+            )
+
+        with patch("beacon.subprocess.run", side_effect=fake_run):
+            self.assertEqual(installed_count(), 2)
+            self.assertEqual(config_remains_count(), 1)
+            self.assertEqual(config_remains_packages(), ["old"])
+            self.assertEqual(auto_installed_count(), 2)
+
+    def test_dpkg_list_nonzero_for_missing_package_is_not_a_command_failure(self):
+        outputs = [
+            SimpleNamespace(stdout="", stderr="", returncode=1),
+            SimpleNamespace(stdout="missing:\n  Candidate: (none)\n", stderr="", returncode=0),
+        ]
+        with patch("beacon.subprocess.run", side_effect=outputs):
+            self.assertEqual(package_state("missing"), "Unknown")
+
+    def test_scan_reports_package_command_timeout_without_traceback(self):
+        with patch.object(sys, "argv", ["beacon", "--scan"]), \
+             patch("beacon.subprocess.run",
+                   side_effect=TimeoutExpired(["dpkg", "-l"], 15)), \
+             redirect_stdout(StringIO()), redirect_stderr(StringIO()) as error:
+            with self.assertRaises(SystemExit) as result:
+                main()
+        self.assertEqual(result.exception.code, 1)
+        self.assertIn("Error: Unable to list installed packages", error.getvalue())
+        self.assertIn("timed out", error.getvalue())
+        self.assertNotIn("Traceback", error.getvalue())
 
     def test_ppa_url_provides_high_confidence_with_evidence(self):
         policy = """\

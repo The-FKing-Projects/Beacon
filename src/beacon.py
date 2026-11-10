@@ -63,15 +63,32 @@ def state_icon(state):
 
     return icons.get(state, "?")
 
+
+class DiscoveryError(Exception):
+    pass
+
+
+def _package_command(command, purpose, allowed_returncodes=(0,)):
+    try:
+        result = subprocess.run(
+            command, capture_output=True, text=True, timeout=15, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise DiscoveryError(f"Unable to {purpose}: {exc}") from exc
+    if result.returncode not in allowed_returncodes:
+        detail = result.stderr.strip() or f"command exited with status {result.returncode}"
+        raise DiscoveryError(f"Unable to {purpose}: {detail}")
+    return result
+
+
 # =================================
 # PACKAGE FUNCTIONS
 # =================================
 
 def package_exists(package):
-    result = subprocess.run(
+    result = _package_command(
         ["apt-cache", "policy", package],
-        capture_output=True,
-        text=True,
+        f"check package availability for {package}",
     )
 
     for line in (result.stdout or "").splitlines():
@@ -83,10 +100,9 @@ def package_exists(package):
 
 
 def package_state(package):
-    result = subprocess.run(
+    result = _package_command(
         ["dpkg", "-l", package],
-        capture_output=True,
-        text=True,
+        f"inspect package state for {package}", allowed_returncodes=(0, 1),
     )
 
     requested_name, separator, requested_arch = package.partition(":")
@@ -120,10 +136,9 @@ def package_state(package):
 
 
 def is_local_candidate(package):
-    result = subprocess.run(
+    result = _package_command(
         ["apt", "list", "--installed"],
-        capture_output=True,
-        text=True,
+        "list installed packages",
     )
 
     for line in result.stdout.splitlines():
@@ -198,10 +213,9 @@ def _confidence_label(score):
 
 
 def package_provenance(package):
-    result = subprocess.run(
+    result = _package_command(
         ["apt-cache", "policy", package],
-        capture_output=True,
-        text=True,
+        f"inspect package provenance for {package}",
     )
     policy_output = result.stdout or ""
     installed_version = None
@@ -281,10 +295,9 @@ def package_source(package):
 
 
 def package_version(package):
-    result = subprocess.run(
+    result = _package_command(
         ["apt-cache", "policy", package],
-        capture_output=True,
-        text=True,
+        f"inspect package version for {package}",
     )
 
     output = result.stdout
@@ -424,36 +437,17 @@ def repository_names():
 # =================================
 
 def installed_count():
-    result = subprocess.run(
-        "dpkg -l | grep '^ii' | wc -l",
-        shell=True,
-        capture_output=True,
-        text=True,
-    )
-
-    return int(result.stdout.strip())
+    result = _package_command(["dpkg", "-l"], "list installed packages")
+    return sum(line.startswith("ii ") for line in result.stdout.splitlines())
 
 
 def config_remains_count():
-    result = subprocess.run(
-        "dpkg -l | grep '^rc' | wc -l",
-        shell=True,
-        capture_output=True,
-        text=True,
-    )
-
-    return int(result.stdout.strip())
+    return len(config_remains_packages())
 
 
 def auto_installed_count():
-    result = subprocess.run(
-        "apt-mark showauto | wc -l",
-        shell=True,
-        capture_output=True,
-        text=True,
-    )
-
-    return int(result.stdout.strip())
+    result = _package_command(["apt-mark", "showauto"], "list automatically installed packages")
+    return sum(bool(line.strip()) for line in result.stdout.splitlines())
 
 
 def manual_installed_count():
@@ -461,12 +455,7 @@ def manual_installed_count():
 
 
 def config_remains_packages():
-    result = subprocess.run(
-        "dpkg -l | grep '^rc'",
-        shell=True,
-        capture_output=True,
-        text=True,
-    )
+    result = _package_command(["dpkg", "-l"], "list configuration-remains packages")
 
     packages = []
 
@@ -474,17 +463,16 @@ def config_remains_packages():
 
         parts = line.split()
 
-        if len(parts) >= 2:
+        if line.startswith("rc ") and len(parts) >= 2:
             packages.append(parts[1])
 
     return sorted(packages)
 
 
 def local_packages():
-    result = subprocess.run(
+    result = _package_command(
         ["apt", "list", "--installed"],
-        capture_output=True,
-        text=True,
+        "list locally installed packages",
     )
 
     packages = []
@@ -563,7 +551,7 @@ def local_summary():
 # MAIN
 # =================================
 
-def main():
+def _main():
 
     if len(sys.argv) > 1 and sys.argv[1] in ("--track", "--untrack", "--check", "--tracked", "--suggest", "--inspect"):
         command = sys.argv[1]
@@ -584,7 +572,7 @@ def main():
                 tracking.check(sys.argv[2])
             else:
                 tracking.list_tracked()
-        except (tracking.TrackingError, tracking.sqlite3.Error, OSError) as exc:
+        except (tracking.TrackingError, tracking.sqlite3.Error, DiscoveryError, OSError) as exc:
             print(f"Error: {exc}", file=sys.stderr)
             sys.exit(1)
         return
@@ -637,6 +625,14 @@ def main():
         f"({provenance['score']}/100)"
     )
     print(f"    Evidence   : {'; '.join(provenance['evidence'])}")
+
+
+def main():
+    try:
+        _main()
+    except DiscoveryError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

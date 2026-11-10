@@ -23,7 +23,7 @@ bash:
 
         with patch(
             "beacon.subprocess.run",
-            return_value=SimpleNamespace(stdout=policy, stderr=""),
+            return_value=SimpleNamespace(stdout=policy, stderr="", returncode=0),
         ):
             provenance = package_provenance("bash")
 
@@ -44,7 +44,7 @@ steam:i386:
 
         with patch(
             "beacon.subprocess.run",
-            return_value=SimpleNamespace(stdout=policy, stderr=""),
+            return_value=SimpleNamespace(stdout=policy, stderr="", returncode=0),
         ):
             provenance = package_provenance("steam")
 
@@ -78,10 +78,10 @@ discord-ptb:
 
         def fake_run(args, **kwargs):
             if args[:2] == ["apt-cache", "policy"]:
-                return SimpleNamespace(stdout=policies[args[2]], stderr="")
+                return SimpleNamespace(stdout=policies[args[2]], stderr="", returncode=0)
 
             if args[:3] == ["apt", "list", "--installed"]:
-                return SimpleNamespace(stdout=installed, stderr="")
+                return SimpleNamespace(stdout=installed, stderr="", returncode=0)
 
             raise AssertionError(f"Unexpected command: {args}")
 
@@ -116,7 +116,7 @@ brave-browser:
 
         def fake_run(args, **kwargs):
             if args[:2] == ["apt-cache", "policy"]:
-                return SimpleNamespace(stdout=policies[args[2]], stderr="")
+                return SimpleNamespace(stdout=policies[args[2]], stderr="", returncode=0)
             raise AssertionError(f"Unexpected command: {args}")
 
         with patch("beacon.subprocess.run", side_effect=fake_run):
@@ -157,7 +157,7 @@ brave-browser:
                     f"        500 {repository} stable/main amd64 Packages\n"
                     "        100 /var/lib/dpkg/status\n"
                 )
-                return SimpleNamespace(stdout=policy, stderr="")
+                return SimpleNamespace(stdout=policy, stderr="", returncode=0)
             raise AssertionError(f"Unexpected command: {args}")
 
         with patch("beacon.subprocess.run", side_effect=fake_run):
@@ -177,6 +177,7 @@ brave-browser:
                 return SimpleNamespace(
                     stdout="",
                     stderr=f"N: Unable to locate package {args[2]}\n",
+                    returncode=0,
                 )
             raise AssertionError(f"Unexpected command: {args}")
 
@@ -203,11 +204,12 @@ orphan-candidate:
                 return SimpleNamespace(
                     stdout="ii  orphan-candidate 1.0 amd64 Example package\n",
                     stderr="",
+                    returncode=0,
                 )
             if args[:2] == ["apt-cache", "policy"]:
-                return SimpleNamespace(stdout=policy, stderr="")
+                return SimpleNamespace(stdout=policy, stderr="", returncode=0)
             if args[:3] == ["apt", "list", "--installed"]:
-                return SimpleNamespace(stdout=installed, stderr="")
+                return SimpleNamespace(stdout=installed, stderr="", returncode=0)
             raise AssertionError(f"Unexpected command: {args}")
 
         with patch("beacon.subprocess.run", side_effect=fake_run):
@@ -223,17 +225,17 @@ orphan-candidate:
 
         with patch(
             "beacon.subprocess.run",
-            return_value=SimpleNamespace(stdout=dpkg_output, stderr=""),
+            return_value=SimpleNamespace(stdout=dpkg_output, stderr="", returncode=0),
         ):
             self.assertEqual(package_state("heroic"), "Config Remains")
 
     def test_package_name_matching_does_not_match_prefix_or_none_candidate(self):
         def fake_run(args, **kwargs):
             if args[:2] == ["dpkg", "-l"]:
-                return SimpleNamespace(stdout="ii  steam-launcher 1.0 amd64\n", stderr="")
+                return SimpleNamespace(stdout="ii  steam-launcher 1.0 amd64\n", stderr="", returncode=0)
 
             if args[:2] == ["apt-cache", "policy"]:
-                return SimpleNamespace(stdout="steam:\n  Candidate: (none)\n", stderr="")
+                return SimpleNamespace(stdout="steam:\n  Candidate: (none)\n", stderr="", returncode=0)
 
             raise AssertionError(f"Unexpected command: {args}")
 
@@ -243,12 +245,13 @@ orphan-candidate:
     def test_candidate_package_is_available(self):
         def fake_run(args, **kwargs):
             if args[:2] == ["dpkg", "-l"]:
-                return SimpleNamespace(stdout="", stderr="")
+                return SimpleNamespace(stdout="", stderr="", returncode=0)
 
             if args[:2] == ["apt-cache", "policy"]:
                 return SimpleNamespace(
                     stdout="steam:\n  Candidate: 1:1.0.0.87\n",
                     stderr="",
+                    returncode=0,
                 )
 
             raise AssertionError(f"Unexpected command: {args}")
