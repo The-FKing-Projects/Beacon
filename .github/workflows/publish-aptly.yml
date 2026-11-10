@@ -1,0 +1,68 @@
+name: Publish to aptly
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing GitHub Release tag to publish to APT
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    if: >-
+      github.repository == 'The-FKing-Projects/Beacon' &&
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      vars.APTLY_PUBLISH_ENABLED == 'true'
+    runs-on: [self-hosted, linux, beacon-apt]
+    timeout-minutes: 15
+    steps:
+      - name: Download the released package and update the signed APT publication
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          EVENT_NAME: ${{ github.event_name }}
+          WORKFLOW_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REPOSITORY" != "The-FKing-Projects/Beacon" ] ||
+             [ "$EVENT_NAME" != "workflow_dispatch" ] ||
+             [ "$WORKFLOW_REF" != "refs/heads/main" ]; then
+            echo "APT publication requires workflow_dispatch on The-FKing-Projects/Beacon main." >&2
+            exit 1
+          fi
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Expected a release tag in vMAJOR.MINOR.PATCH form." >&2
+            exit 1
+          fi
+          for tool in gh dpkg-deb aptly flock; do
+            if ! command -v "$tool" >/dev/null; then
+              echo "Required runner tool is missing: $tool" >&2
+              exit 1
+            fi
+          done
+
+          work="$(mktemp -d)"
+          trap 'rm -rf -- "$work"' EXIT
+          version="${TAG#v}-1"
+          filename="beacon_${version}_all.deb"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern "$filename" --dir "$work"
+          package="$work/$filename"
+          if [ "$(dpkg-deb -f "$package" Package)" != "beacon" ] ||
+             [ "$(dpkg-deb -f "$package" Version)" != "$version" ] ||
+             [ "$(dpkg-deb -f "$package" Architecture)" != "all" ]; then
+            echo "Release asset metadata does not match beacon $version (all)." >&2
+            exit 1
+          fi
+
+          mkdir -p "$HOME/.cache"
+          exec 9>"$HOME/.cache/beacon-aptly-publish.lock"
+          flock --exclusive --wait 600 9
+          aptly repo add fkingprojects "$package"
+          aptly publish update -batch=true -skip-signing=false stable .

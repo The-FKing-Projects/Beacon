@@ -20,6 +20,7 @@ on:
       - main
 
 permissions:
+  actions: write
   contents: write
   pull-requests: read
 
@@ -226,3 +227,15 @@ jobs:
         run: |
           package="../beacon_$(dpkg-parsechangelog -SVersion)_all.deb"
           gh release upload "$TAG" "$package" --clobber
+
+      - name: Dispatch APT publication after the release asset is ready
+        if: >-
+          github.repository == 'The-FKing-Projects/Beacon' &&
+          steps.plan.outputs.release == 'true' &&
+          vars.APTLY_PUBLISH_ENABLED == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.plan.outputs.tag }}
+        run: |
+          gh workflow run publish-aptly.yml --repo "$GITHUB_REPOSITORY" \
+            --ref main -f "tag=$TAG"

@@ -156,6 +156,10 @@ The release workflow builds, checks, and uploads a matching `.deb` for every
 automated release. To add or refresh the package for an existing release, run
 the **Publish Debian package** workflow with that release's tag.
 
+Releases can also be published to the project's self-hosted, GPG-signed aptly
+repository. See [APT publishing setup](docs/research/release-automation.md#self-hosted-apt-publishing)
+for runner requirements, enablement, and retry instructions.
+
 ## Direction
 
 The first end-to-end milestone is to:
