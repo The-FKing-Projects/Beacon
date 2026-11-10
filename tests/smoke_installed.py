@@ -57,6 +57,16 @@ def main():
         if "No confirmed upstream" not in run("--untrack", "beacon-smoke-absent", expected_code=1):
             raise RuntimeError("Missing associations must produce a visible error")
 
+        database.unlink()
+        with sqlite3.connect(database) as db:
+            db.execute("CREATE VIEW unrelated AS SELECT 42 AS value")
+        before = database.read_bytes()
+        error = run("--tracked", expected_code=1)
+        if str(database) not in error or "unrecognized" not in error:
+            raise RuntimeError("Incompatible stores must produce an actionable error")
+        if database.read_bytes() != before:
+            raise RuntimeError("Beacon modified an incompatible tracking store")
+
 
 if __name__ == "__main__":
     main()

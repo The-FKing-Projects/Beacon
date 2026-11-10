@@ -39,6 +39,12 @@ The schema below is a future design, not the current deployed database. The
 manual tracking store uses `PRAGMA user_version = 1` with a `tracked_packages`
 table. Migrating it to this expanded schema will require a new version and a
 backup-preserving migration that retains existing confirmed associations.
+The current implementation validates all four version-1 columns, their types,
+nullability, and composite primary key, rejects unexpected user schema objects,
+checks SQLite integrity, and validates saved package/architecture/repository
+identities. An unversioned database containing a view is not an empty store.
+Failures close the connection and report the path without resetting existing
+data; no migration or automatic repair is performed.
 All timestamps are UTC RFC 3339 strings. JSON columns contain UTF-8 JSON text,
 validated by Beacon on read and write; they are not SQLite JSON-extension
 requirements. `PRAGMA foreign_keys = ON` is required on **every connection**.

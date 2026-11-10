@@ -242,6 +242,110 @@ class TrackingTest(unittest.TestCase):
             self.assertEqual(db.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall(),
                              [("unrelated",)])
 
+    def test_database_rejects_nonempty_unversioned_schemas_without_changes(self):
+        schemas = [
+            "CREATE VIEW user_data AS SELECT 42 AS value",
+            "CREATE TABLE unrelated (id INTEGER)",
+        ]
+        for schema in schemas:
+            with self.subTest(schema=schema), tempfile.TemporaryDirectory() as state, \
+                 patch.dict(os.environ, {"XDG_STATE_HOME": state}):
+                path = tracking.database_path()
+                path.parent.mkdir()
+                with contextlib.closing(sqlite3.connect(path)) as db, db:
+                    db.execute(schema)
+                before = path.read_bytes()
+                with self.assertRaisesRegex(tracking.TrackingError, "unrecognized"):
+                    tracking.open_database()
+                self.assertEqual(path.read_bytes(), before)
+
+    def test_database_rejects_incompatible_versioned_schemas_without_changes(self):
+        cases = [
+            ("CREATE TABLE tracked_packages (package_name TEXT)", 1),
+            ("""CREATE TABLE tracked_packages (
+                package_name TEXT NOT NULL, architecture TEXT NOT NULL,
+                repository_id INTEGER NOT NULL, repository_name TEXT NOT NULL
+            )""", 1),
+            ("""CREATE TABLE tracked_packages (
+                package_name TEXT, architecture TEXT,
+                repository_id INTEGER, repository_name TEXT,
+                PRIMARY KEY (package_name, architecture)
+            )""", 1),
+            ("CREATE TABLE tracked_packages (package_name TEXT)", 2),
+        ]
+        for schema, version in cases:
+            with self.subTest(schema=schema, version=version), \
+                 tempfile.TemporaryDirectory() as state, \
+                 patch.dict(os.environ, {"XDG_STATE_HOME": state}):
+                path = tracking.database_path()
+                path.parent.mkdir()
+                with contextlib.closing(sqlite3.connect(path)) as db, db:
+                    db.execute(schema)
+                    db.execute(f"PRAGMA user_version = {version}")
+                before = path.read_bytes()
+                with self.assertRaises(tracking.TrackingError) as error:
+                    tracking.open_database()
+                self.assertIn(str(path), str(error.exception))
+                self.assertIn("Beacon has not reset it", str(error.exception))
+                self.assertEqual(path.read_bytes(), before)
+
+    def test_database_rejects_invalid_saved_associations_without_changes(self):
+        cases = [
+            ("app:amd64", "amd64", 123, "Owner/Project"),
+            ("app*", "amd64", 123, "Owner/Project"),
+            ("app", "amd64\n", 123, "Owner/Project"),
+            ("app", "amd64", 0, "Owner/Project"),
+            ("app", "amd64", 1.5, "Owner/Project"),
+            ("app", "amd64", "not-an-id", "Owner/Project"),
+            ("app", "amd64", 123, "https://github.com/Owner/Project"),
+            ("app", "amd64", 123, "Owner/Project\n"),
+            ("app", "amd64", 123, sqlite3.Binary(b"Owner/Project")),
+        ]
+        for row in cases:
+            with self.subTest(row=row), tempfile.TemporaryDirectory() as state, \
+                 patch.dict(os.environ, {"XDG_STATE_HOME": state}):
+                with contextlib.closing(tracking.open_database()) as db, db:
+                    db.execute("INSERT INTO tracked_packages VALUES (?, ?, ?, ?)", row)
+                path = tracking.database_path()
+                before = path.read_bytes()
+                with self.assertRaises(tracking.TrackingError):
+                    tracking.open_database()
+                self.assertEqual(path.read_bytes(), before)
+
+    def test_database_rejects_extra_schema_objects_without_changes(self):
+        self.save_association()
+        with contextlib.closing(tracking.open_database()) as db, db:
+            db.execute("CREATE TRIGGER prevent_delete BEFORE DELETE ON tracked_packages "
+                       "BEGIN SELECT RAISE(IGNORE); END")
+        path = tracking.database_path()
+        before = path.read_bytes()
+        with self.assertRaisesRegex(tracking.TrackingError, "unrecognized"):
+            tracking.open_database()
+        self.assertEqual(path.read_bytes(), before)
+
+    def test_corrupt_database_has_actionable_cli_error_and_is_preserved(self):
+        path = tracking.database_path()
+        path.parent.mkdir()
+        original = b"This is not a SQLite database."
+        path.write_bytes(original)
+        with patch.object(sys, "argv", ["beacon", "--tracked"]), \
+             contextlib.redirect_stderr(io.StringIO()) as error:
+            with self.assertRaises(SystemExit) as result:
+                beacon.main()
+        self.assertEqual(result.exception.code, 1)
+        self.assertIn(str(path), error.getvalue())
+        self.assertIn("Preserve the database before attempting recovery", error.getvalue())
+        self.assertEqual(path.read_bytes(), original)
+
+    def test_valid_existing_store_opens_without_changes(self):
+        self.save_association()
+        path = tracking.database_path()
+        before = path.read_bytes()
+        with contextlib.closing(tracking.open_database()) as db:
+            self.assertEqual(db.execute("SELECT * FROM tracked_packages").fetchall(),
+                             [("app", "amd64", 123, "Owner/Project")])
+        self.assertEqual(path.read_bytes(), before)
+
     def test_github_errors_are_visible(self):
         error = HTTPError("https://api.github.com", 429, "limited", {}, None)
         with patch("tracking.urlopen", side_effect=error):

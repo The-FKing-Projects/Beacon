@@ -106,6 +106,21 @@ supported exact-filename entry is checked; other checksum formats are not.
 The command does not check dependencies or
 execute package maintainer scripts, and never installs a package.
 
+### Tracking-store errors and recovery
+
+Beacon checks the tracking database's schema, integrity, and saved association
+fields before using it. Unknown versions, incompatible tables, unexpected
+schema objects, corrupt files, and invalid records produce an error showing
+the database path. Beacon does not reset or automatically repair that data.
+
+If opening the store fails, stop other Beacon processes and preserve a copy
+of the database and any adjacent `-wal`/`-shm` files before attempting recovery.
+Check the reported path, permissions, and whether a newer Beacon version
+created the store. Restore a known-good backup only after preserving the
+failed store. Without a usable backup, keep the original and move it aside
+explicitly before starting a fresh store; associations must then be reviewed
+and confirmed again. Do not edit the schema version merely to bypass an error.
+
 ## Build the Debian package
 
 The package installs Beacon's CLI and Python modules; it does not install or

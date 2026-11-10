@@ -86,11 +86,12 @@ def open_database():
         connection = sqlite3.connect(path)
         connection.execute("PRAGMA foreign_keys = ON")
         version = connection.execute("PRAGMA user_version").fetchone()[0]
-        tables = connection.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+        objects = connection.execute(
+            "SELECT name, type FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'"
         ).fetchall()
-        if version == 0 and not tables:
+        if version == 0 and not objects:
             with connection:
+                connection.execute("BEGIN IMMEDIATE")
                 connection.execute("""CREATE TABLE tracked_packages (
                     package_name TEXT NOT NULL,
                     architecture TEXT NOT NULL,
@@ -99,14 +100,39 @@ def open_database():
                     PRIMARY KEY (package_name, architecture)
                 )""")
                 connection.execute("PRAGMA user_version = 1")
-        elif version != 1 or {row[0] for row in tables} != {"tracked_packages"}:
-            connection.close()
+        elif version != 1 or set(objects) != {("tracked_packages", "table")}:
             raise TrackingError("Unsupported or unrecognized tracking database; no changes made.")
+        expected_columns = [
+            ("package_name", "TEXT", 1, None, 1),
+            ("architecture", "TEXT", 1, None, 2),
+            ("repository_id", "INTEGER", 1, None, 0),
+            ("repository_name", "TEXT", 1, None, 0),
+        ]
+        columns = connection.execute("PRAGMA table_info(tracked_packages)").fetchall()
+        if [tuple(column[1:]) for column in columns] != expected_columns:
+            raise TrackingError("Unrecognized tracking table structure; no changes made.")
+        if connection.execute("PRAGMA quick_check").fetchall() != [("ok",)]:
+            raise TrackingError("Tracking database integrity check failed; no changes made.")
+        rows = connection.execute(
+            "SELECT package_name, architecture, repository_id, repository_name FROM tracked_packages"
+        )
+        for name, architecture, identifier, repository in rows:
+            if (not isinstance(name, str) or not PACKAGE_PATTERN.fullmatch(name) or ":" in name
+                    or not isinstance(architecture, str)
+                    or not re.fullmatch(r"[a-z0-9][a-z0-9-]*", architecture)
+                    or not isinstance(identifier, int) or identifier <= 0
+                    or not isinstance(repository, str)):
+                raise TrackingError("Invalid saved tracking association; no changes made.")
+            if repository_name(repository) != repository:
+                raise TrackingError("Invalid saved tracking repository; no changes made.")
         return connection
-    except (OSError, sqlite3.Error) as exc:
+    except (TrackingError, OSError, sqlite3.Error) as exc:
         if connection is not None:
             connection.close()
-        raise TrackingError(f"Unable to open tracking database {path}: {exc}") from exc
+        raise TrackingError(
+            f"Unable to open tracking database {path}: {exc} "
+            "Preserve the database before attempting recovery; Beacon has not reset it."
+        ) from exc
 
 
 def github_get(path):
