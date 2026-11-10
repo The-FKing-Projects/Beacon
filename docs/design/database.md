@@ -2,15 +2,17 @@
 
 ## Status and scope
 
-This is the broader proposed MVP design for issue #4. Beacon now implements a
-smaller manual GitHub tracking store, but the schema and discovery persistence
-described below are not implemented. The current store records a package name
-and architecture and one explicitly confirmed GitHub repository name and ID;
-it does not record candidate evidence, rejected decisions, or scan snapshots.
-The `--untrack` command explicitly removes one confirmed association after
-confirmation, including for packages no longer installed. It resolves against
-saved records, requires an architecture when ambiguous, and refuses deletion
-if the selected repository identity changed during confirmation.
+This is the broader proposed MVP design for issue #4. Beacon implements a
+smaller manual GitHub tracking store at schema version 2. It records a package
+name and architecture, one explicitly confirmed GitHub repository name and
+ID, and the identity and verification evidence for a prepared update. It does
+not record candidate evidence, rejected decisions, or scan snapshots.
+The `--untrack` command explicitly removes one confirmed association and any
+prepared artifact after confirmation, including for packages no longer
+installed. Replacing an upstream association also invalidates its prepared
+update. Both operations resolve against saved records, require an
+architecture when ambiguous, and refuse deletion if the selected repository
+identity changed during confirmation.
 
 The store keeps the latest successful package observation, proposed upstream
 repositories, and explicit user decisions. Package provenance and upstream
@@ -30,21 +32,23 @@ change records without requiring direct SQL.
 The per-user default is `$XDG_STATE_HOME/beacon/tracking.sqlite3`, or
 `~/.local/state/beacon/tracking.sqlite3` when `XDG_STATE_HOME` is unset or
 empty. Follow the XDG rule that configured paths must be absolute; reject an
-invalid relative path with a clear error. No system-wide store, credentials,
-package contents, or update automation is included in this design.
+invalid relative path with a clear error. Prepared package bytes are stored
+separately under `$XDG_DATA_HOME/beacon/updates`, not in SQLite. No
+system-wide store, credentials, or discovery persistence is included in this
+design.
 
 ## Proposed expanded schema
 
 The schema below is a future design, not the current deployed database. The
-manual tracking store uses `PRAGMA user_version = 1` with a `tracked_packages`
-table. Migrating it to this expanded schema will require a new version and a
-backup-preserving migration that retains existing confirmed associations.
-The current implementation validates all four version-1 columns, their types,
-nullability, and composite primary key, rejects unexpected user schema objects,
-checks SQLite integrity, and validates saved package/architecture/repository
-identities. An unversioned database containing a view is not an empty store.
-Failures close the connection and report the path without resetting existing
-data; no migration or automatic repair is performed.
+manual tracking store uses `PRAGMA user_version = 2`, with a `tracked_packages`
+table and a `prepared_updates` table. Migration from version 1 first preserves
+a `.v1.bak` backup using SQLite's backup API, then creates the prepared-update
+table without changing confirmed associations. The current implementation
+validates both table schemas, rejects unexpected user schema objects, checks
+SQLite integrity, and validates saved package, architecture, repository, and
+prepared-artifact identities. An unversioned database containing a view is
+not an empty store. Failures close the connection and report the path without
+resetting existing data; no automatic repair is performed.
 All timestamps are UTC RFC 3339 strings. JSON columns contain UTF-8 JSON text,
 validated by Beacon on read and write; they are not SQLite JSON-extension
 requirements. `PRAGMA foreign_keys = ON` is required on **every connection**.

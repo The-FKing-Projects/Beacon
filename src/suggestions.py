@@ -12,6 +12,7 @@ def package_homepage(name, architecture):
         result = subprocess.run(
             ["dpkg-query", "-W", "-f", "${Homepage}", f"{name}:{architecture}"],
             capture_output=True, text=True, timeout=15, check=False,
+            env=tracking.command_environment(),
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise tracking.TrackingError(f"Unable to read package homepage: {exc}") from exc

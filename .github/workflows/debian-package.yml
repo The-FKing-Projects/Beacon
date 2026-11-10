@@ -46,10 +46,15 @@ jobs:
       - name: Install Debian packaging tools
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends build-essential debhelper dpkg-dev python3 ca-certificates
+          apt-get install -y --no-install-recommends build-essential bubblewrap debhelper dpkg-dev python3 ca-certificates
 
       - name: Run deterministic regression tests
         run: python3 -m unittest discover -s tests -v
+
+      - name: Run isolated real APT handoff tests
+        env:
+          BEACON_RUN_APT_HOOK_EXPERIMENTS: "1"
+        run: python3 -m unittest discover -s tests -p test_apt_hook_experiments.py -v
 
       - name: Build the binary package
         run: dpkg-buildpackage -us -uc -b

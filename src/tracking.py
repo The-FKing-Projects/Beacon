@@ -1,15 +1,18 @@
 """Manual GitHub release tracking for installed Debian packages."""
 
 import json
+import fcntl
 import os
 from contextlib import closing
 from http.client import HTTPException
 from pathlib import Path
 import re
 import sqlite3
+import stat
 import subprocess
+import tempfile
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote, urlparse
+from urllib.parse import quote, unquote, urlparse
 from urllib.request import Request, urlopen
 
 
@@ -26,6 +29,45 @@ ASSET_ARCHITECTURES = {
 
 class TrackingError(Exception):
     pass
+
+
+def command_environment():
+    environment = os.environ.copy()
+    environment.update({"LC_ALL": "C", "LANG": "C"})
+    return environment
+
+
+def acquire_database_lock():
+    path = database_path().parent
+    try:
+        path.mkdir(parents=True, exist_ok=True, mode=0o700)
+        details = path.lstat()
+        if not stat.S_ISDIR(details.st_mode) or details.st_uid != os.geteuid():
+            raise TrackingError("Tracking storage directory is not owned by the current user.")
+        if details.st_mode & 0o077:
+            path.chmod(0o700)
+        descriptor = os.open(
+            path / ".updates.lock",
+            os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0),
+            0o600,
+        )
+        lock_details = os.fstat(descriptor)
+        if (not stat.S_ISREG(lock_details.st_mode)
+                or lock_details.st_uid != os.geteuid()
+                or lock_details.st_mode & 0o077):
+            os.close(descriptor)
+            raise TrackingError("Tracking lock is not private and owned by the current user.")
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        return descriptor
+    except (OSError, TrackingError) as exc:
+        raise TrackingError(f"Unable to lock tracking state: {exc}") from exc
+
+
+def release_database_lock(descriptor):
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_UN)
+    finally:
+        os.close(descriptor)
 
 
 def repository_name(value):
@@ -46,8 +88,13 @@ def installed_package(name):
         raise TrackingError("Invalid Debian package name.")
     try:
         result = subprocess.run(
-            ["dpkg-query", "-W", "-f", "${binary:Package}\t${Architecture}\t${db:Status-Status}\t${Version}\n", name],
+            [
+                "dpkg-query", "-W",
+                "-f", "${binary:Package}\t${Architecture}\t${db:Status-Status}\t${Version}\n",
+                name,
+            ],
             capture_output=True, text=True, timeout=15, check=False,
+            env=command_environment(),
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise TrackingError(f"Unable to run dpkg-query: {exc}") from exc
@@ -58,8 +105,12 @@ def installed_package(name):
         if len(parts) != 4:
             raise TrackingError("Unexpected dpkg-query output; package was not recorded.")
         binary_name, architecture, state, version = parts
-        if (binary_name.split(":", 1)[0] == requested_name and state == "installed"
-                and (not requested_arch or architecture == requested_arch)):
+        installed_name, separator, installed_arch = binary_name.partition(":")
+        if installed_name != requested_name:
+            continue
+        if separator and installed_arch != architecture:
+            raise TrackingError("dpkg-query returned inconsistent package architecture metadata.")
+        if state == "installed" and (not requested_arch or architecture == requested_arch):
             matches.append((requested_name, architecture, version))
     if result.returncode != 0:
         raise TrackingError(f"Unable to inspect installed package {name}: {result.stderr.strip() or 'not found'}")
@@ -79,6 +130,105 @@ def database_path():
     return root / "beacon" / "tracking.sqlite3"
 
 
+TRACKED_COLUMNS = [
+    ("package_name", "TEXT", 1, None, 1),
+    ("architecture", "TEXT", 1, None, 2),
+    ("repository_id", "INTEGER", 1, None, 0),
+    ("repository_name", "TEXT", 1, None, 0),
+]
+PREPARED_COLUMNS = [
+    ("package_name", "TEXT", 1, None, 1),
+    ("architecture", "TEXT", 1, None, 2),
+    ("repository_id", "INTEGER", 1, None, 0),
+    ("repository_name", "TEXT", 1, None, 0),
+    ("release_tag", "TEXT", 1, None, 0),
+    ("asset_name", "TEXT", 1, None, 0),
+    ("asset_url", "TEXT", 1, None, 0),
+    ("checksum_asset_url", "TEXT", 0, None, 0),
+    ("expected_sha256", "TEXT", 0, None, 0),
+    ("sha256", "TEXT", 1, None, 0),
+    ("checksum_status", "TEXT", 1, None, 0),
+    ("asset_package_name", "TEXT", 1, None, 0),
+    ("asset_architecture", "TEXT", 1, None, 0),
+    ("asset_version", "TEXT", 1, None, 0),
+    ("installed_version", "TEXT", 1, None, 0),
+    ("artifact_path", "TEXT", 1, None, 0),
+    ("prepared_at", "TEXT", 1, None, 0),
+]
+
+
+def _create_prepared_table(connection):
+    connection.execute("""CREATE TABLE prepared_updates (
+        package_name TEXT NOT NULL,
+        architecture TEXT NOT NULL,
+        repository_id INTEGER NOT NULL,
+        repository_name TEXT NOT NULL,
+        release_tag TEXT NOT NULL,
+        asset_name TEXT NOT NULL,
+        asset_url TEXT NOT NULL,
+        checksum_asset_url TEXT,
+        expected_sha256 TEXT,
+        sha256 TEXT NOT NULL,
+        checksum_status TEXT NOT NULL,
+        asset_package_name TEXT NOT NULL,
+        asset_architecture TEXT NOT NULL,
+        asset_version TEXT NOT NULL,
+        installed_version TEXT NOT NULL,
+        artifact_path TEXT NOT NULL,
+        prepared_at TEXT NOT NULL,
+        PRIMARY KEY (package_name, architecture)
+    )""")
+
+
+def _backup_before_migration(connection, path):
+    backup = path.with_name(path.name + ".v1.bak")
+    temporary = None
+    try:
+        descriptor, temporary = tempfile.mkstemp(
+            prefix=f".{path.name}.backup-", dir=path.parent,
+        )
+        os.fchmod(descriptor, 0o600)
+        os.close(descriptor)
+        destination = sqlite3.connect(temporary)
+        try:
+            connection.backup(destination)
+            destination.commit()
+        finally:
+            destination.close()
+        with open(temporary, "rb") as source:
+            os.fsync(source.fileno())
+        os.link(temporary, backup)
+        directory_fd = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+    except FileExistsError as exc:
+        raise TrackingError(
+            f"Migration backup already exists at {backup}; preserve and review it before retrying."
+        ) from exc
+    except (OSError, sqlite3.Error) as exc:
+        raise TrackingError(f"Unable to preserve tracking database before migration: {exc}") from exc
+    finally:
+        if temporary is not None:
+            try:
+                os.unlink(temporary)
+            except FileNotFoundError:
+                pass
+
+
+def _create_current_schema(connection):
+    connection.execute("""CREATE TABLE tracked_packages (
+        package_name TEXT NOT NULL,
+        architecture TEXT NOT NULL,
+        repository_id INTEGER NOT NULL,
+        repository_name TEXT NOT NULL,
+        PRIMARY KEY (package_name, architecture)
+    )""")
+    _create_prepared_table(connection)
+    connection.execute("PRAGMA user_version = 2")
+
+
 def open_database():
     path = database_path()
     connection = None
@@ -93,25 +243,30 @@ def open_database():
         if version == 0 and not objects:
             with connection:
                 connection.execute("BEGIN IMMEDIATE")
-                connection.execute("""CREATE TABLE tracked_packages (
-                    package_name TEXT NOT NULL,
-                    architecture TEXT NOT NULL,
-                    repository_id INTEGER NOT NULL,
-                    repository_name TEXT NOT NULL,
-                    PRIMARY KEY (package_name, architecture)
-                )""")
-                connection.execute("PRAGMA user_version = 1")
-        elif version != 1 or set(objects) != {("tracked_packages", "table")}:
+                _create_current_schema(connection)
+            version = 2
+            objects = [("tracked_packages", "table"), ("prepared_updates", "table")]
+        if set(objects) != {("tracked_packages", "table")} and version == 1:
             raise TrackingError("Unsupported or unrecognized tracking database; no changes made.")
-        expected_columns = [
-            ("package_name", "TEXT", 1, None, 1),
-            ("architecture", "TEXT", 1, None, 2),
-            ("repository_id", "INTEGER", 1, None, 0),
-            ("repository_name", "TEXT", 1, None, 0),
-        ]
+        if version not in (1, 2):
+            raise TrackingError("Unsupported or unrecognized tracking database; no changes made.")
         columns = connection.execute("PRAGMA table_info(tracked_packages)").fetchall()
-        if [tuple(column[1:]) for column in columns] != expected_columns:
+        if [tuple(column[1:]) for column in columns] != TRACKED_COLUMNS:
             raise TrackingError("Unrecognized tracking table structure; no changes made.")
+        if version == 1:
+            _backup_before_migration(connection, path)
+            with connection:
+                connection.execute("BEGIN IMMEDIATE")
+                _create_prepared_table(connection)
+                connection.execute("PRAGMA user_version = 2")
+            version = 2
+            objects = [("tracked_packages", "table"), ("prepared_updates", "table")]
+        if version == 2:
+            if set(objects) != {("tracked_packages", "table"), ("prepared_updates", "table")}:
+                raise TrackingError("Unsupported or unrecognized tracking database; no changes made.")
+            columns = connection.execute("PRAGMA table_info(prepared_updates)").fetchall()
+            if [tuple(column[1:]) for column in columns] != PREPARED_COLUMNS:
+                raise TrackingError("Unrecognized prepared-update table structure; no changes made.")
         if connection.execute("PRAGMA quick_check").fetchall() != [("ok",)]:
             raise TrackingError("Tracking database integrity check failed; no changes made.")
         rows = connection.execute(
@@ -126,6 +281,54 @@ def open_database():
                 raise TrackingError("Invalid saved tracking association; no changes made.")
             if repository_name(repository) != repository:
                 raise TrackingError("Invalid saved tracking repository; no changes made.")
+        prepared = connection.execute(
+            "SELECT package_name, architecture, repository_id, repository_name, release_tag, "
+            "asset_name, asset_url, checksum_asset_url, expected_sha256, sha256, checksum_status, "
+            "asset_package_name, asset_architecture, asset_version, installed_version, artifact_path, "
+            "prepared_at FROM prepared_updates"
+        )
+        for row in prepared:
+            (
+                name, architecture, identifier, repository, tag, asset_name, asset_url,
+                checksum_url, expected_digest, digest, checksum_status, asset_package,
+                asset_architecture, asset_version, installed_version, artifact_path, prepared_at,
+            ) = row
+            if (
+                not isinstance(name, str) or not PACKAGE_PATTERN.fullmatch(name) or ":" in name
+                or not isinstance(architecture, str)
+                or not re.fullmatch(r"[a-z0-9][a-z0-9-]*", architecture)
+                or not isinstance(identifier, int) or identifier <= 0
+                or not isinstance(repository, str) or repository_name(repository) != repository
+                or not isinstance(tag, str) or not tag or any(not c.isprintable() for c in tag)
+                or not isinstance(asset_name, str) or not asset_name or "/" in asset_name
+                or "\\" in asset_name or any(not c.isprintable() for c in asset_name)
+                or not isinstance(asset_url, str)
+                or not _valid_release_asset_url(asset_url, repository, tag, asset_name)
+                or (checksum_url is not None and (
+                    not isinstance(checksum_url, str)
+                    or not _valid_release_asset_url(checksum_url, repository, tag, "SHA256SUMS")
+                ))
+                or (expected_digest is not None and not re.fullmatch(r"[0-9a-f]{64}", str(expected_digest)))
+                or not re.fullmatch(r"[0-9a-f]{64}", str(digest))
+                or checksum_status not in ("matched-unauthenticated", "entry-missing", "asset-missing")
+                or (checksum_status == "matched-unauthenticated" and (
+                    expected_digest is None or expected_digest != digest or checksum_url is None
+                ))
+                or (checksum_status == "entry-missing" and (
+                    expected_digest is not None or checksum_url is None
+                ))
+                or (checksum_status == "asset-missing" and (
+                    expected_digest is not None or checksum_url is not None
+                ))
+                or not isinstance(asset_package, str) or asset_package != name
+                or not isinstance(asset_architecture, str)
+                or not re.fullmatch(r"[a-z0-9][a-z0-9-]*", asset_architecture)
+                or not isinstance(asset_version, str) or not asset_version
+                or not isinstance(installed_version, str) or not installed_version
+                or not isinstance(artifact_path, str) or not os.path.isabs(artifact_path)
+                or not isinstance(prepared_at, str) or not prepared_at
+            ):
+                raise TrackingError("Invalid saved prepared update; no changes made.")
         return connection
     except (TrackingError, OSError, sqlite3.Error) as exc:
         if connection is not None:
@@ -134,6 +337,23 @@ def open_database():
             f"Unable to open tracking database {path}: {exc} "
             "Preserve the database before attempting recovery; Beacon has not reset it."
         ) from exc
+
+
+def _valid_release_asset_url(url, repository, tag, asset):
+    try:
+        parsed = urlparse(url)
+        expected = (
+            f"/{repository}/releases/download/{tag}/{asset}"
+        )
+        return (
+            parsed.scheme == "https"
+            and parsed.netloc.lower() == "github.com"
+            and not parsed.username and not parsed.password
+            and not parsed.query and not parsed.fragment and not parsed.params
+            and unquote(parsed.path) == expected
+        )
+    except ValueError:
+        return False
 
 
 def github_get(path):
@@ -252,6 +472,58 @@ def print_deb_assets(assets, package, architecture):
     print("Package identity, contents, compatibility, and integrity have not been verified.")
 
 
+def _prepared_artifact_for_removal(db, package, architecture):
+    row = db.execute(
+        "SELECT artifact_path FROM prepared_updates WHERE package_name=? AND architecture=?",
+        (package, architecture),
+    ).fetchone()
+    if not row:
+        return None
+    configured = os.environ.get("XDG_DATA_HOME")
+    if configured:
+        root = Path(configured)
+        if not root.is_absolute():
+            raise TrackingError("XDG_DATA_HOME must be an absolute path.")
+    else:
+        root = Path.home() / ".local" / "share"
+    beacon_directory = root / "beacon"
+    directory = beacon_directory / "updates"
+    for path in (beacon_directory, directory):
+        try:
+            directory_details = path.lstat()
+        except OSError as exc:
+            raise TrackingError(f"Unable to inspect prepared-update storage: {exc}") from exc
+        if (not stat.S_ISDIR(directory_details.st_mode)
+                or directory_details.st_uid != os.geteuid()
+                or stat.S_IMODE(directory_details.st_mode) & 0o077):
+            raise TrackingError("Prepared-update storage is not private; refusing to remove it.")
+    artifact = Path(row[0])
+    expected = re.escape(f"{package}.{architecture}.") + r"[a-f0-9]{32}\.deb"
+    if artifact.parent != directory or not re.fullmatch(expected, artifact.name):
+        raise TrackingError("Prepared artifact path is invalid; refusing to remove the association.")
+    try:
+        details = artifact.lstat()
+    except FileNotFoundError:
+        return artifact
+    except OSError as exc:
+        raise TrackingError(f"Unable to inspect prepared artifact: {exc}") from exc
+    if (not stat.S_ISREG(details.st_mode) or details.st_uid != os.geteuid()
+            or details.st_mode & 0o077):
+        raise TrackingError("Prepared artifact is not private; refusing to remove the association.")
+    return artifact
+
+
+def _remove_prepared_artifact(artifact, context):
+    if artifact is None:
+        return
+    try:
+        artifact.unlink(missing_ok=True)
+    except OSError as exc:
+        raise TrackingError(
+            f"{context}, but prepared artifact cleanup failed: {exc}"
+        ) from exc
+
+
 def compare_versions(installed, tag):
     upstream, separator, revision = installed.partition("-")
     if separator and not re.fullmatch(r"[0-9]+", revision):
@@ -296,19 +568,35 @@ def track(package, repository):
         if answer not in ("y", "yes"):
             print("Association not saved.")
             return
-        with db:
-            db.execute("BEGIN IMMEDIATE")
-            current = db.execute(
-                "SELECT repository_name, repository_id FROM tracked_packages WHERE package_name=? AND architecture=?",
-                (name, architecture),
-            ).fetchone()
-            if current != existing:
-                raise TrackingError("Association changed during confirmation; review it and try again.")
-            db.execute("""INSERT INTO tracked_packages
-                (package_name, architecture, repository_id, repository_name) VALUES (?, ?, ?, ?)
-                ON CONFLICT(package_name, architecture) DO UPDATE SET
-                    repository_id=excluded.repository_id, repository_name=excluded.repository_name""",
-                (name, architecture, identifier, canonical))
+        lock = acquire_database_lock()
+        prepared_artifact = None
+        try:
+            with db:
+                db.execute("BEGIN IMMEDIATE")
+                current = db.execute(
+                    "SELECT repository_name, repository_id FROM tracked_packages WHERE package_name=? AND architecture=?",
+                    (name, architecture),
+                ).fetchone()
+                if current != existing:
+                    raise TrackingError("Association changed during confirmation; review it and try again.")
+                if current != (canonical, identifier):
+                    prepared_artifact = _prepared_artifact_for_removal(
+                        db, name, architecture,
+                    )
+                    db.execute(
+                        "DELETE FROM prepared_updates WHERE package_name=? AND architecture=?",
+                        (name, architecture),
+                    )
+                db.execute("""INSERT INTO tracked_packages
+                    (package_name, architecture, repository_id, repository_name) VALUES (?, ?, ?, ?)
+                    ON CONFLICT(package_name, architecture) DO UPDATE SET
+                        repository_id=excluded.repository_id, repository_name=excluded.repository_name""",
+                    (name, architecture, identifier, canonical))
+            _remove_prepared_artifact(
+                prepared_artifact, "Confirmed upstream changed",
+            )
+        finally:
+            release_database_lock(lock)
     print("Association saved.")
 
 
@@ -342,15 +630,30 @@ def untrack(package):
         if answer not in ("y", "yes"):
             print("Association not removed.")
             return
-        with db:
-            db.execute("BEGIN IMMEDIATE")
-            result = db.execute(
-                "DELETE FROM tracked_packages WHERE package_name=? AND architecture=? "
-                "AND repository_name=? AND repository_id=?",
-                (name, architecture, repository, identifier),
+        lock = acquire_database_lock()
+        prepared_artifact = None
+        try:
+            with db:
+                db.execute("BEGIN IMMEDIATE")
+                prepared_artifact = _prepared_artifact_for_removal(
+                    db, name, architecture,
+                )
+                result = db.execute(
+                    "DELETE FROM tracked_packages WHERE package_name=? AND architecture=? "
+                    "AND repository_name=? AND repository_id=?",
+                    (name, architecture, repository, identifier),
+                )
+                if result.rowcount != 1:
+                    raise TrackingError("Association changed during confirmation; review it and try again.")
+                db.execute(
+                    "DELETE FROM prepared_updates WHERE package_name=? AND architecture=?",
+                    (name, architecture),
+                )
+            _remove_prepared_artifact(
+                prepared_artifact, "Association was removed",
             )
-            if result.rowcount != 1:
-                raise TrackingError("Association changed during confirmation; review it and try again.")
+        finally:
+            release_database_lock(lock)
     print("Association removed.")
 
 
@@ -369,13 +672,17 @@ def check(package):
     tag, url, assets = latest_release(repository)
     if repository != row[0]:
         with closing(open_database()) as db, db:
-            result = db.execute(
-                "UPDATE tracked_packages SET repository_name=? WHERE package_name=? AND architecture=? "
-                "AND repository_name=? AND repository_id=?",
-                (repository, name, architecture, row[0], identifier),
-            )
-            if result.rowcount != 1:
-                raise TrackingError("Association changed during the release check; try again.")
+            lock = acquire_database_lock()
+            try:
+                result = db.execute(
+                    "UPDATE tracked_packages SET repository_name=? WHERE package_name=? AND architecture=? "
+                    "AND repository_name=? AND repository_id=?",
+                    (repository, name, architecture, row[0], identifier),
+                )
+                if result.rowcount != 1:
+                    raise TrackingError("Association changed during the release check; try again.")
+            finally:
+                release_database_lock(lock)
     print(f"Package: {name}:{architecture}")
     print(f"Installed version: {version}")
     print(f"GitHub repository: https://github.com/{repository}")

@@ -3,6 +3,7 @@
 VERSION = "0.9.4"
 
 import os
+import re
 import subprocess
 import sys
 from urllib.parse import urlparse
@@ -10,6 +11,7 @@ from urllib.parse import urlparse
 import tracking
 import suggestions
 import inspection
+import updates
 
 
 # =================================
@@ -41,6 +43,8 @@ def help_menu():
     print("    --suggest <package>            Suggest GitHub upstreams.")
     print("    --check <package>              Check its latest GitHub release.")
     print("    --inspect <package> <asset.deb> Inspect a selected release asset.")
+    print("    --prepare <package> <asset.deb> Download and pin a selected update.")
+    print("    --install <package>            Review and install a prepared update through APT.")
     print("    --tracked                      List confirmed associations.")
     print()
     print("Examples:")
@@ -72,6 +76,7 @@ def _package_command(command, purpose, allowed_returncodes=(0,)):
     try:
         result = subprocess.run(
             command, capture_output=True, text=True, timeout=15, check=False,
+            env=tracking.command_environment(),
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise DiscoveryError(f"Unable to {purpose}: {exc}") from exc
@@ -106,6 +111,7 @@ def package_state(package):
     )
 
     requested_name, separator, requested_arch = package.partition(":")
+    matching_states = []
 
     for line in (result.stdout or "").splitlines():
         parts = line.split()
@@ -114,19 +120,29 @@ def package_state(package):
             continue
 
         installed_name, arch_separator, installed_arch = parts[1].partition(":")
+        package_architecture = parts[3] if len(parts) >= 4 else ""
 
         if installed_name != requested_name:
             continue
 
-        if separator and (
-            not arch_separator or installed_arch != requested_arch
-        ):
+        if arch_separator and installed_arch != package_architecture:
+            raise DiscoveryError("dpkg returned inconsistent package architecture metadata.")
+        if separator and package_architecture != requested_arch:
             continue
 
-        if parts[0] == "ii":
-            return "Installed"
+        if parts[0] in ("ii", "rc"):
+            matching_states.append((package_architecture, parts[0]))
 
-        if parts[0] == "rc":
+    if len({architecture for architecture, _ in matching_states}) > 1:
+        raise DiscoveryError(
+            f"Multiple architectures are installed for {requested_name}; "
+            "specify package:architecture."
+        )
+    if matching_states:
+        state = matching_states[0][1]
+        if state == "ii":
+            return "Installed"
+        if state == "rc":
             return "Config Remains"
 
     if package_exists(package):
@@ -141,46 +157,21 @@ def is_local_candidate(package):
         "list installed packages",
     )
 
+    requested_name, separator, requested_architecture = package.partition(":")
     for line in result.stdout.splitlines():
         if "[installed,local]" not in line:
             continue
-
-        installed_package = line.split("/")[0].strip()
-
-        if installed_package == package:
+        parts = line.split()
+        if len(parts) < 3 or not re.fullmatch(r"[a-z0-9][a-z0-9-]*", parts[2]):
+            continue
+        installed_package = parts[0].split("/", 1)[0].strip()
+        installed_name, arch_separator, installed_architecture = installed_package.partition(":")
+        if (installed_name == requested_name
+                and (not separator or requested_architecture == parts[2])
+                and (not arch_separator or installed_architecture == parts[2])):
             return True
 
     return False
-
-
-def _policy_origins_for_version(output, selected_version):
-    origins = []
-    current_version = None
-    in_version_table = False
-
-    for line in output.splitlines():
-        stripped = line.strip()
-
-        if stripped.lower().startswith("version table:"):
-            in_version_table = True
-            continue
-
-        if not in_version_table:
-            continue
-
-        version_line = stripped[3:].strip() if stripped.startswith("***") else stripped
-        parts = version_line.split()
-
-        if len(parts) >= 2 and parts[1].isdigit():
-            current_version = parts[0]
-            continue
-
-        if current_version == selected_version and (
-            "://" in stripped or "/var/lib/dpkg/status" in stripped
-        ):
-            origins.append(stripped)
-
-    return origins
 
 
 def _source_for_repository_url(url):
@@ -229,7 +220,7 @@ def package_provenance(package):
 
     is_installed = installed_version and installed_version != "(none)"
     selected_version = installed_version if is_installed else candidate_version
-    origins = _policy_origins_for_version(policy_output, selected_version)
+    origins = inspection.policy_origins_for_version(policy_output, selected_version)
     repository_urls = []
     has_dpkg_status_origin = False
 
@@ -305,14 +296,14 @@ def package_version(package):
 
     for line in output.splitlines():
 
-        if "Installed:" in line:
-            version = line.split("Installed:")[1].strip()
+        if line.strip().lower().startswith("installed:"):
+            version = line.split(":", 1)[1].strip()
 
             if version != "(none)":
                 return version
 
-        if "Candidate:" in line:
-            candidate = line.split("Candidate:")[1].strip()
+        if line.strip().lower().startswith("candidate:"):
+            candidate = line.split(":", 1)[1].strip()
 
     return candidate if candidate and candidate != "(none)" else "Unknown"
 
@@ -480,10 +471,11 @@ def local_packages():
     for line in result.stdout.splitlines():
 
         if "[installed,local]" in line:
-
-            package = line.split("/")[0]
-
-            packages.append(package)
+            fields = line.split()
+            if len(fields) >= 3 and re.fullmatch(r"[a-z0-9][a-z0-9-]*", fields[2]):
+                package = fields[0].split("/", 1)[0]
+                name = package.split(":", 1)[0]
+                packages.append(f"{name}:{fields[2]}")
 
     return sorted(packages)
 
@@ -553,9 +545,15 @@ def local_summary():
 
 def _main():
 
-    if len(sys.argv) > 1 and sys.argv[1] in ("--track", "--untrack", "--check", "--tracked", "--suggest", "--inspect"):
+    if len(sys.argv) > 1 and sys.argv[1] in (
+        "--track", "--untrack", "--check", "--tracked", "--suggest",
+        "--inspect", "--prepare", "--install",
+    ):
         command = sys.argv[1]
-        expected = {"--track": 4, "--untrack": 3, "--check": 3, "--tracked": 2, "--suggest": 3, "--inspect": 4}[command]
+        expected = {
+            "--track": 4, "--untrack": 3, "--check": 3, "--tracked": 2,
+            "--suggest": 3, "--inspect": 4, "--prepare": 4, "--install": 3,
+        }[command]
         if len(sys.argv) != expected:
             print(f"Invalid arguments for {command}; see --help.", file=sys.stderr)
             sys.exit(1)
@@ -566,6 +564,10 @@ def _main():
                 tracking.untrack(sys.argv[2])
             elif command == "--inspect":
                 inspection.inspect(sys.argv[2], sys.argv[3])
+            elif command == "--prepare":
+                updates.prepare(sys.argv[2], sys.argv[3])
+            elif command == "--install":
+                updates.install(sys.argv[2])
             elif command == "--suggest":
                 suggestions.suggest(sys.argv[2])
             elif command == "--check":

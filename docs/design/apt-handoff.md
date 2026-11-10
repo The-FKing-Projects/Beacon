@@ -1,11 +1,18 @@
-# Future APT handoff: safety design
+# APT handoff safety design
 
 ## Status
 
-This is a proposal, not an implemented update or installation feature.
-`--inspect` deletes its temporary download; it does not retain an artifact
-for installation, check dependencies, or authorize an APT operation. An
-installation workflow must be designed and reviewed separately.
+The bounded APT handoff described here is implemented in the CLI as
+`--prepare` and `--install`. The deterministic suite, isolated real APT
+transactions, Debian package build, and installed-CLI smoke test have passed
+in containers for all five declared Debian/Ubuntu targets.
+
+The trust boundary is explicit: Beacon downloads and prepares packages as the
+user, and the privileged helper copies the selected bytes into a root-owned
+staging directory before asking APT to install them. Root, the administrator,
+and root-run APT hooks are trusted. The implementation protects the staged
+artifact and transaction policy from unprivileged changes; it does not protect
+against a malicious administrator or promise universal rollback.
 
 ## Trust and verification
 
@@ -38,44 +45,47 @@ installation workflow must be designed and reviewed separately.
 - Block downgrades: an asset older than the installed package must not be
   handed off for installation.
 
-## Proposed handoff requirements
+## Handoff policy
 
-1. Make download and installation separate, explicit user actions. Before
-   requesting approval, show the selected source and exact release, asset,
-   digest, package metadata, version change, and verification limitations.
-   Do not automatically install a suggested asset or bypass a failed check.
-2. Keep the approved artifact in a private location and bind approval to its
-   bytes, package identity, source, and installed state. Recheck the digest,
-   metadata, repository identity, and installed state immediately before
-   handoff; reject changed or missing inputs. Define safe ownership,
-   permissions, cleanup, and protection against file replacement before
-   implementing privileged installation.
-3. Use APT's supported local-package workflow for dependency resolution
-   instead of executing the `.deb`, running arbitrary installer commands, or
-   replacing the package manager. Preview APT's proposed dependency changes,
-   removals, and upgrades; treat errors and unresolved dependencies as
-   blockers. Block plans that remove installed packages. A simulation is
-   advisory, not a guarantee: repositories and installed state can change
-   before the real transaction. The implementation must prevent a changed
-   real plan from bypassing the removal restriction, not rely on preview
-   alone.
-4. Require a clear, fresh confirmation of the planned APT action after the
-   preview and before requesting elevated privileges. Block removals and
-   downgrades; do not silently accept other changes beyond what was shown.
-   Decide how to handle APT's own interactive prompts, changing plans, and
-   non-interactive sessions before implementation.
-5. Explain that installation may execute package maintainer scripts with
-   elevated privileges. Report APT failures and partial state accurately;
-   never claim an installation succeeded based only on initiating a command.
+1. `--prepare` downloads only the exact user-selected release asset. It
+   verifies package name, exact architecture, version direction, and any
+   exact `SHA256SUMS` entry; a mismatched checksum blocks preparation. Missing
+   or matching-but-unauthenticated checksum evidence is displayed explicitly.
+   The artifact and its source/release identity, digest, metadata, and prior
+   installed version are retained in private user storage.
+2. `--install` revalidates the confirmed repository ID/name, selected release
+   and asset URL, checksum evidence, artifact digest and package metadata,
+   APT ownership, and installed package state. It previews the complete APT
+   transaction and requires fresh confirmation after showing all package
+   changes. Removals, downgrades, ambiguous identities, and changed state are
+   blockers.
+3. After approval, Beacon invokes a root-owned helper through `sudo`. The
+   helper rechecks package and installed-state identity, copies the artifact
+   into a root-owned, non-writable staging directory, and runs APT's supported
+   local-package workflow with `--no-remove`. A command-line-appended
+   protocol-v3 pre-install hook compares the actual action set to the
+   approved plan and rejects removals, downgrades, unsupported actions, or a
+   changed/missing selected archive. APT errors are reported with the observed
+   package state; partial system changes are possible and no rollback is
+   promised.
+4. The parent verifies the installed package name, architecture, and version
+   after APT returns success. The package's maintainer scripts execute with
+   root privileges; only install packages whose publisher and contents you
+   trust.
 
-## Decisions still needed
+The Debian package contains the privileged helper but does not add a
+persistent APT hook, install any upstream asset automatically, or change
+configured APT repositories. Direct Nala support, Topgrade integration, and
+GUI work remain out of scope.
 
-The acceptable forms of independent authenticity evidence, how to present
-approval for missing verification, handling same-version reinstalls and
-incomparable versions, privilege escalation UX, and the precise APT invocation
-and preview mechanism are not yet decided. The design must be tested on
-supported Debian and Ubuntu versions, including interrupted operations and
-changed system state.
+## Accepted limitations
+
+The selected asset and an unsigned checksum published alongside it do not
+authenticate a publisher. If independent authenticity evidence is missing,
+Beacon warns and requires explicit approval; a failed check always blocks.
+Same-version reinstalls require the same fresh approval, and uncomparable
+versions are blocked. APT remains responsible for dependency resolution and
+installation.
 
 ## APT investigation and release gate
 
@@ -182,18 +192,14 @@ concurrent process with permission to modify the archive can create the same
 gap, although protecting against a malicious privileged administrator is
 outside any ordinary package transaction's trust boundary.
 
-This is encouraging but **not a proven enforcement solution**. The fixtures
-do not establish that the hook always contains the complete transaction in
-all solver and architecture cases, that all locks protect all relevant
-inputs, or that a failing hook reverses earlier side effects. Downloads and
-other hooks can run before it, and hooks can run after it. We have not proved
-an atomic binding between the bytes checked by the final hook and dpkg's read,
-safe archive ownership and immutability against other privileged processes,
-complete control of hook order while preserving system integrations, fallback
-protocols, configuration handling, dependency resolution, removal and
-multiarch cases, partial failures, or behavior on every supported version.
-The fixture policy parser is test code, not a production transaction
-verifier. A parser for simulation output is not a substitute for enforcement.
+The protocol experiments do not establish atomic binding between the bytes
+checked by the final hook and dpkg's later read. The production helper closes
+the unprivileged race by copying into root-owned, non-writable staging; the
+remaining race requires a privileged actor or hook and is within the accepted
+trust boundary. The production hook rejects changed plans at APT's handoff
+point, and an isolated real-transaction test exercises the helper itself.
+Neither mechanism protects against a malicious administrator or guarantees
+rollback after failures.
 
 To repeat the experiments on an amd64 system with bubblewrap, user namespaces,
 APT, dpkg, and Python available:
@@ -205,11 +211,21 @@ BEACON_RUN_APT_HOOK_EXPERIMENTS=1 python3 -m unittest discover -s tests -p test_
 They are skipped by default and fail rather than falling back to an
 unisolated install if namespace setup fails.
 
-**Release gate:** do not implement an automated APT handoff until a tested
-mechanism can bind the approved artifact and complete transaction to the
-actual privileged operation, block all removals and downgrades, and abort on
-changed or unverifiable plans. Until then, Beacon may inspect and report but
-must not claim to enforce an installation plan.
+**Qualification record:** the deterministic suite, 17 opt-in isolated
+real-transaction tests, binary package build, helper packaging check, and
+installed-CLI smoke test passed on Debian 12, Debian 13, Ubuntu 22.04,
+Ubuntu 24.04, and Ubuntu 26.04 in amd64 Podman containers. The Debian package
+workflow runs the same matrix checks and requires the isolated tests; its
+results remain the CI release gate. Tests are opt-in for local runs:
+
+```sh
+BEACON_RUN_APT_HOOK_EXPERIMENTS=1 python3 -m unittest discover -s tests -p test_apt_hook_experiments.py -v
+```
+
+The suite must fail closed if bubblewrap or namespace isolation is unavailable;
+it must never fall back to a host installation. The isolated tests use bubblewrap and do not modify the host package
+database. They do not prove protection against root, a malicious administrator,
+or privileged APT hooks.
 
 References: [apt-get(8)](https://manpages.debian.org/bookworm/apt/apt-get.8.en.html)
 and [apt.conf(5)](https://manpages.debian.org/bookworm/apt/apt.conf.5.en.html).

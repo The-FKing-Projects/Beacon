@@ -20,7 +20,10 @@ class TrackingTest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        env = patch.dict(os.environ, {"XDG_STATE_HOME": self.temp.name})
+        env = patch.dict(os.environ, {
+            "XDG_STATE_HOME": self.temp.name,
+            "XDG_DATA_HOME": str(Path(self.temp.name) / "data"),
+        })
         env.start()
         self.addCleanup(env.stop)
 
@@ -160,6 +163,52 @@ class TrackingTest(unittest.TestCase):
         with contextlib.closing(tracking.open_database()) as db, db:
             db.execute("INSERT INTO tracked_packages VALUES (?, ?, ?, ?)",
                        ("app", architecture, identifier, repository))
+
+    def save_prepared_update(self):
+        beacon_directory = Path(os.environ["XDG_DATA_HOME"]) / "beacon"
+        directory = beacon_directory / "updates"
+        beacon_directory.mkdir(parents=True, mode=0o700)
+        beacon_directory.chmod(0o700)
+        directory.mkdir(mode=0o700)
+        directory.chmod(0o700)
+        artifact = directory / f"app.amd64.{'a' * 32}.deb"
+        artifact.write_bytes(b"prepared fixture")
+        artifact.chmod(0o600)
+        with contextlib.closing(tracking.open_database()) as db, db:
+            db.execute(
+                "INSERT INTO prepared_updates VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    "app", "amd64", 123, "Owner/Project", "v2.0", "app.deb",
+                    "https://github.com/Owner/Project/releases/download/v2.0/app.deb",
+                    None, None, "a" * 64, "asset-missing", "app", "amd64", "2.0",
+                    "1.0", str(artifact), "2026-01-01T00:00:00+00:00",
+                ),
+            )
+        return artifact
+
+    def test_changing_confirmed_upstream_invalidates_prepared_update(self):
+        self.save_association()
+        artifact = self.save_prepared_update()
+        with patch("tracking.installed_package", return_value=("app", "amd64", "1.0")), \
+             patch("tracking.resolve_repository", return_value=("Other/Project", 456)), \
+             patch("builtins.input", return_value="yes"), contextlib.redirect_stdout(io.StringIO()):
+            tracking.track("app", "Other/Project")
+        with contextlib.closing(tracking.open_database()) as db:
+            self.assertIsNone(db.execute(
+                "SELECT 1 FROM prepared_updates WHERE package_name='app' AND architecture='amd64'",
+            ).fetchone())
+        self.assertFalse(artifact.exists())
+
+    def test_untrack_removes_prepared_update_and_artifact(self):
+        self.save_association()
+        artifact = self.save_prepared_update()
+        with patch("builtins.input", return_value="yes"), contextlib.redirect_stdout(io.StringIO()):
+            tracking.untrack("app")
+        with contextlib.closing(tracking.open_database()) as db:
+            self.assertIsNone(db.execute(
+                "SELECT 1 FROM prepared_updates WHERE package_name='app' AND architecture='amd64'",
+            ).fetchone())
+        self.assertFalse(artifact.exists())
 
     def test_untrack_is_offline_and_independent_of_installed_state(self):
         self.save_association()
@@ -320,6 +369,66 @@ class TrackingTest(unittest.TestCase):
                 self.assertIn(str(path), str(error.exception))
                 self.assertIn("Beacon has not reset it", str(error.exception))
                 self.assertEqual(path.read_bytes(), before)
+
+    def test_version_one_store_migrates_with_confirmed_associations_preserved(self):
+        path = tracking.database_path()
+        path.parent.mkdir()
+        with contextlib.closing(sqlite3.connect(path)) as db, db:
+            db.execute("""CREATE TABLE tracked_packages (
+                package_name TEXT NOT NULL,
+                architecture TEXT NOT NULL,
+                repository_id INTEGER NOT NULL,
+                repository_name TEXT NOT NULL,
+                PRIMARY KEY (package_name, architecture)
+            )""")
+            db.execute(
+                "INSERT INTO tracked_packages VALUES (?, ?, ?, ?)",
+                ("app", "amd64", 123, "Owner/Project"),
+            )
+            db.execute("PRAGMA user_version = 1")
+
+        with contextlib.closing(tracking.open_database()) as db:
+            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 2)
+            self.assertEqual(
+                db.execute("SELECT * FROM tracked_packages").fetchall(),
+                [("app", "amd64", 123, "Owner/Project")],
+            )
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM prepared_updates").fetchone()[0], 0)
+
+        backup = path.with_name(path.name + ".v1.bak")
+        self.assertTrue(backup.is_file())
+        with contextlib.closing(sqlite3.connect(backup)) as db:
+            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 1)
+            self.assertEqual(
+                db.execute("SELECT * FROM tracked_packages").fetchall(),
+                [("app", "amd64", 123, "Owner/Project")],
+            )
+
+    def test_version_one_migration_refuses_to_overwrite_an_existing_backup(self):
+        path = tracking.database_path()
+        path.parent.mkdir()
+        with contextlib.closing(sqlite3.connect(path)) as db, db:
+            db.execute("""CREATE TABLE tracked_packages (
+                package_name TEXT NOT NULL,
+                architecture TEXT NOT NULL,
+                repository_id INTEGER NOT NULL,
+                repository_name TEXT NOT NULL,
+                PRIMARY KEY (package_name, architecture)
+            )""")
+            db.execute(
+                "INSERT INTO tracked_packages VALUES (?, ?, ?, ?)",
+                ("app", "amd64", 123, "Owner/Project"),
+            )
+            db.execute("PRAGMA user_version = 1")
+        backup = path.with_name(path.name + ".v1.bak")
+        backup.write_bytes(b"preserve")
+        before = path.read_bytes()
+
+        with self.assertRaisesRegex(tracking.TrackingError, "backup already exists"):
+            tracking.open_database()
+
+        self.assertEqual(path.read_bytes(), before)
+        self.assertEqual(backup.read_bytes(), b"preserve")
 
     def test_database_rejects_invalid_saved_associations_without_changes(self):
         cases = [

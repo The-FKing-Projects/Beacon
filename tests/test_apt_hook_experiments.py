@@ -1,6 +1,7 @@
 """Opt-in real dpkg experiments in a rootless, read-only-host namespace."""
 
 import hashlib
+import json
 import os
 from pathlib import Path
 import shutil
@@ -11,15 +12,21 @@ import unittest
 
 
 @unittest.skipUnless(
-    os.environ.get("BEACON_RUN_APT_HOOK_EXPERIMENTS") == "1"
-    and all(shutil.which(tool) for tool in ("bwrap", "apt-get", "dpkg", "dpkg-deb")),
-    "Set BEACON_RUN_APT_HOOK_EXPERIMENTS=1 and install bubblewrap/APT to run",
+    os.environ.get("BEACON_RUN_APT_HOOK_EXPERIMENTS") == "1",
+    "Set BEACON_RUN_APT_HOOK_EXPERIMENTS=1 to run isolated APT transactions",
 )
 class AptHookExperiments(unittest.TestCase):
     def setUp(self):
+        missing = [
+            tool for tool in ("bwrap", "apt-get", "dpkg", "dpkg-deb")
+            if not shutil.which(tool)
+        ]
+        if missing:
+            self.fail(f"Isolated APT test prerequisites are missing: {', '.join(missing)}")
         arch = subprocess.run(["dpkg", "--print-architecture"], capture_output=True, text=True, check=True)
         if arch.stdout.strip() != "amd64":
             self.skipTest("Fixture requires an amd64 dpkg host")
+        self.repo_root = Path(__file__).resolve().parents[1]
         self.tmp = tempfile.TemporaryDirectory(prefix="beacon-apt-hook-")
         self.addCleanup(self.tmp.cleanup)
         self.base = Path(self.tmp.name)
@@ -112,6 +119,7 @@ class AptHookExperiments(unittest.TestCase):
             ]
         return subprocess.run(
             ["bwrap", "--unshare-all", "--ro-bind", "/", "/", "--tmpfs", "/tmp",
+             "--ro-bind", str(self.repo_root), str(self.repo_root),
              "--bind", str(self.base), str(self.base), "--ro-bind", "/proc", "/proc", "--dev", "/dev",
              "--uid", "0", "--gid", "0", "--chdir", str(self.base),
              "--setenv", "APT_CONFIG", str(self.base / "apt.conf"), "--setenv", "LC_ALL", "C",
@@ -123,6 +131,222 @@ class AptHookExperiments(unittest.TestCase):
              *(str(path) for path in (archives or [self.archive]))],
             text=True, capture_output=True, timeout=60, check=False,
         )
+
+    def production_policy_hook(self, version="1.0", old_version="-"):
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+        import apt_handoff
+
+        self.archive.chmod(0o400)
+        digest = hashlib.sha256(self.archive.read_bytes()).hexdigest()
+        manifest = self.base / "approved-manifest.json"
+        manifest.write_text(json.dumps({
+            "sha256": digest,
+            "artifact": str(self.archive),
+            "package": "beacon-hook-fixture",
+            "architecture": "amd64",
+            "installed_architecture": "amd64",
+            "installed_version": old_version,
+            "repository": "owner/repo",
+            "repository_id": 123,
+            "release_tag": f"v{version}",
+            "asset_name": f"beacon-hook-fixture_{version}_amd64.deb",
+            "asset_url": (
+                "https://github.com/owner/repo/releases/download/"
+                f"v{version}/beacon-hook-fixture_{version}_amd64.deb"
+            ),
+            "version": version,
+            "plan": [{
+                "package": "beacon-hook-fixture",
+                "architecture": "amd64",
+                "old_architecture": "-" if old_version == "-" else "amd64",
+                "old_version": old_version,
+                "new_version": version,
+                "action": "install",
+            }],
+        }))
+        manifest.chmod(0o400)
+        hook = self.base / "beacon-policy-hook"
+        hook.write_text(
+            "#!/usr/bin/python3\n"
+            "import sys\n"
+            f"sys.path.insert(0, {str(Path(apt_handoff.__file__).parent)!r})\n"
+            "from apt_handoff import hook_main\n"
+            f"raise SystemExit(hook_main({str(manifest)!r}))\n"
+        )
+        hook.chmod(0o500)
+        return hook
+
+    def run_production_helper(self, archive, manifest):
+        apt_config = self.base / "production-apt"
+        apt_config.mkdir()
+        (apt_config / "apt.conf.d").mkdir()
+        (apt_config / "apt.conf").write_text(
+            f'Dir::Etc::parts "{apt_config}/apt.conf.d";\n'
+            'Dir::Etc::main "/dev/null";\n'
+            f'Dir::Etc::sourcelist "{self.base}/sources.list";\n'
+            f'Dir::Etc::sourceparts "{self.base}/empty";\n'
+            'Dir::State::status "/var/lib/dpkg/status";\n'
+            f'Dir::State::lists "{self.base}/lists";\n'
+            f'Dir::State::extended_states "{self.base}/extended_states";\n'
+            f'Dir::Cache::archives "{self.base}/archives";\n'
+            f'Dir::Cache::pkgcache "{self.base}/pkgcache";\n'
+            f'Dir::Cache::srcpkgcache "{self.base}/srcpkgcache";\n'
+            f'Dir::Log "{self.base}/log";\n'
+            'APT::Architecture "amd64";\n'
+            'APT::Architectures { "amd64"; };\n'
+            'APT::Sandbox::User "root";\n'
+            'APT::Get::Assume-Yes "true";\n'
+            f'DPkg::Options {{ "--log={self.base}/log/dpkg.log"; }};\n'
+        )
+        source_root = Path(__file__).resolve().parents[1] / "src"
+        runner = (
+            "import json, sys\n"
+            "from pathlib import Path\n"
+            f"sys.path.insert(0, {str(source_root)!r})\n"
+            "import apt_handoff\n"
+            f"apt_handoff.STAGING_ROOT = Path({str(self.base / 'run/beacon')!r})\n"
+            f"apt_handoff.privileged_install({str(archive)!r}, "
+            f"json.loads({json.dumps(manifest)!r}))\n"
+        )
+        return subprocess.run(
+            [
+                "bwrap", "--unshare-all", "--ro-bind", "/", "/", "--tmpfs", "/tmp",
+                "--ro-bind", str(self.repo_root), str(self.repo_root),
+                "--bind", str(self.base), str(self.base),
+                "--bind", str(apt_config), "/etc/apt",
+                "--bind", str(self.root / "var/lib/dpkg"), "/var/lib/dpkg",
+                "--bind", str(self.base / "lists"), "/var/lib/apt/lists",
+                "--bind", str(self.base / "archives"), "/var/cache/apt/archives",
+                "--bind", str(self.base / "log"), "/var/log",
+                "--ro-bind", "/proc", "/proc", "--dev", "/dev",
+                "--uid", "0", "--gid", "0", "--chdir", str(self.base),
+                "--setenv", "LC_ALL", "C", sys.executable, "-c", runner,
+            ],
+            text=True, capture_output=True, timeout=90, check=False,
+        )
+
+    def production_helper_manifest(self, archive):
+        source_root = Path(__file__).resolve().parents[1] / "src"
+        sys.path.insert(0, str(source_root))
+        digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+        return {
+            "sha256": digest,
+            "artifact": str(archive),
+            "package": "beacon-hook-fixture",
+            "architecture": "amd64",
+            "installed_architecture": "amd64",
+            "installed_version": "1.0",
+            "repository": "owner/repo",
+            "repository_id": 123,
+            "release_tag": "v2.0",
+            "asset_name": "beacon-hook-fixture_2.0_amd64.deb",
+            "asset_url": (
+                "https://github.com/owner/repo/releases/download/"
+                "v2.0/beacon-hook-fixture_2.0_amd64.deb"
+            ),
+            "version": "2.0",
+            "plan": [{
+                "package": "beacon-hook-fixture",
+                "architecture": "amd64",
+                "old_architecture": "amd64",
+                "old_version": "1.0",
+                "new_version": "2.0",
+                "action": "install",
+            }],
+        }
+
+    def build_upgrade_archive(self, depends=None):
+        self.assertEqual(self.install(0).returncode, 0)
+        dependency = f"Depends: {depends}\n" if depends else ""
+        (self.base / "pkg/DEBIAN/control").write_text(
+            "Package: beacon-hook-fixture\nVersion: 2.0\nArchitecture: amd64\n"
+            f"{dependency}"
+            "Maintainer: Test <test@example.test>\nDescription: APT hook fixture\n"
+        )
+        archive = self.base / "fixture-v2.deb"
+        subprocess.run(["dpkg-deb", "--build", str(self.base / "pkg"), str(archive)],
+                       capture_output=True, check=True)
+        archive.chmod(0o600)
+        return archive
+
+    def test_production_privileged_helper_performs_isolated_upgrade(self):
+        archive = self.build_upgrade_archive()
+        staging = self.base / "run/beacon"
+        staging.mkdir(parents=True, mode=0o700)
+        staging.chmod(0o700)
+        stale = staging / "transaction-interrupted"
+        stale.mkdir(mode=0o700)
+        (stale / "selected.deb").write_bytes(b"interrupted fixture")
+        result = self.run_production_helper(
+            archive, self.production_helper_manifest(archive),
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        status = (self.root / "var/lib/dpkg/status").read_text()
+        self.assertIn("Version: 2.0", status)
+        self.assertFalse(stale.exists())
+        self.assertEqual(list((self.base / "run/beacon").glob("transaction-*")), [])
+
+    def test_production_privileged_helper_rejects_plan_drift(self):
+        archive = self.build_upgrade_archive()
+        manifest = self.production_helper_manifest(archive)
+        manifest["plan"].append({
+            "package": "unreviewed-dependency",
+            "architecture": "amd64",
+            "old_architecture": "-",
+            "old_version": "-",
+            "new_version": "1.0",
+            "action": "install",
+        })
+        result = self.run_production_helper(archive, manifest)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("differs from the reviewed plan", result.stderr)
+        status = (self.root / "var/lib/dpkg/status").read_text()
+        self.assertIn("Version: 1.0", status)
+        self.assertNotIn("Version: 2.0", status)
+
+    def test_production_privileged_helper_reports_unresolved_dependency(self):
+        archive = self.build_upgrade_archive("beacon-missing-dependency (= 1.0)")
+        result = self.run_production_helper(
+            archive, self.production_helper_manifest(archive),
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("APT installation failed", result.stderr)
+        status = (self.root / "var/lib/dpkg/status").read_text()
+        self.assertIn("Version: 1.0", status)
+        self.assertNotIn("Version: 2.0", status)
+
+    def test_production_privileged_helper_rejects_changed_source_artifact(self):
+        archive = self.build_upgrade_archive()
+        manifest = self.production_helper_manifest(archive)
+        archive.write_bytes(b"changed after review")
+        result = self.run_production_helper(archive, manifest)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Pinned package digest changed", result.stderr)
+        status = (self.root / "var/lib/dpkg/status").read_text()
+        self.assertIn("Version: 1.0", status)
+        self.assertNotIn("Version: 2.0", status)
+
+    def test_production_hook_allows_reviewed_real_install(self):
+        hook = self.production_policy_hook()
+        result = self.install(0, additional_hooks=[hook])
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        status = (self.root / "var/lib/dpkg/status").read_text()
+        self.assertIn("Version: 1.0", status)
+
+    def test_production_hook_rejects_artifact_changed_after_review(self):
+        hook = self.production_policy_hook()
+        (self.base / "pkg/DEBIAN/control").write_text(
+            "Package: beacon-hook-fixture\nVersion: 2.0\nArchitecture: amd64\n"
+            "Maintainer: Test <test@example.test>\nDescription: Changed fixture\n"
+        )
+        self.archive.unlink()
+        subprocess.run(["dpkg-deb", "--build", str(self.base / "pkg"), str(self.archive)],
+                       capture_output=True, check=True)
+        self.archive.chmod(0o400)
+        result = self.install(0, additional_hooks=[hook])
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        status = (self.root / "var/lib/dpkg/status").read_text()
+        self.assertNotIn("Package: beacon-hook-fixture", status)
 
     def test_hook_failure_aborts_before_package_change(self):
         result = self.install(1)

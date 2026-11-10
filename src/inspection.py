@@ -19,6 +19,31 @@ MAX_CHECKSUM_SIZE = 1024 * 1024
 DOWNLOAD_HOSTS = {"github.com", "release-assets.githubusercontent.com", "objects.githubusercontent.com"}
 
 
+def policy_origins_for_version(output, selected_version):
+    origins = []
+    current_version = None
+    in_version_table = False
+
+    for line in output.splitlines():
+        stripped = line.strip()
+        if stripped.lower().startswith("version table:"):
+            in_version_table = True
+            continue
+        if not in_version_table:
+            continue
+
+        version_line = stripped[3:].strip() if stripped.startswith("***") else stripped
+        parts = version_line.split()
+        if len(parts) >= 2 and parts[1].isdigit():
+            current_version = parts[0]
+            continue
+        if current_version == selected_version and (
+            "://" in stripped or "/var/lib/dpkg/status" in stripped
+        ):
+            origins.append(stripped)
+    return origins
+
+
 def allowed_download_url(url):
     try:
         parsed = urlparse(url)
@@ -77,10 +102,23 @@ def download(url, destination, limit):
 def selected_assets(repository, filename):
     data = tracking.github_get("/repos/" + quote(repository, safe="/") + "/releases/latest")
     tag = data.get("tag_name")
+    return _assets_from_release(repository, tag, filename, data)
+
+
+def selected_release_assets(repository, tag, filename):
+    encoded_tag = quote(tag, safe="")
+    data = tracking.github_get(
+        "/repos/" + quote(repository, safe="/") + "/releases/tags/" + encoded_tag
+    )
+    return _assets_from_release(repository, tag, filename, data)
+
+
+def _assets_from_release(repository, tag, filename, data):
     assets = data.get("assets")
     if (not isinstance(tag, str) or not tag or any(not c.isprintable() for c in tag)
+            or data.get("tag_name") != tag
             or not isinstance(assets, list)):
-        raise tracking.TrackingError("GitHub returned invalid release metadata.")
+        raise tracking.TrackingError("GitHub returned invalid or changed release metadata.")
     if (not filename.lower().endswith(".deb") or "/" in filename or "\\" in filename
             or any(not char.isprintable() for char in filename)):
         raise tracking.TrackingError("Specify the exact .deb asset filename from --check.")
@@ -138,6 +176,7 @@ def inspect_fields(path):
         result = subprocess.run(
             ["dpkg-deb", "--show", "--showformat=${Package}\t${Architecture}\t${Version}\n", str(path)],
             capture_output=True, text=True, timeout=30, check=False,
+            env=tracking.command_environment(),
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise tracking.TrackingError(f"Unable to inspect .deb metadata: {exc}") from exc
@@ -157,6 +196,7 @@ def version_relation(installed, candidate):
             valid = subprocess.run(
                 ["dpkg", "--validate-version", version],
                 capture_output=True, text=True, timeout=10, check=False,
+                env=tracking.command_environment(),
             )
             if valid.returncode != 0:
                 raise tracking.TrackingError(
@@ -166,6 +206,7 @@ def version_relation(installed, candidate):
             result = subprocess.run(
                 ["dpkg", "--compare-versions", candidate, operation, installed],
                 capture_output=True, text=True, timeout=10, check=False,
+                env=tracking.command_environment(),
             )
             if result.returncode == 0:
                 return label

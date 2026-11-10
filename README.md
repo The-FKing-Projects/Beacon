@@ -3,28 +3,32 @@
 Beacon aims to help keep standalone Debian packages up to date when they have
 no configured repository or built-in updater. It investigates where an
 installed package might have come from, helps users identify its upstream
-project, and aims to track upstream releases.
+project, and lets users review selected upstream packages before handing an
+update to APT.
 
-The initial focus is Debian and Ubuntu. Beacon is at an early stage: discovery,
-source classification, GitHub upstream suggestions, and manually confirmed
-release tracking work today. Beacon can inspect a user-selected release asset;
-automatic upstream approval and installation are not implemented.
+The initial focus is Debian and Ubuntu. Discovery, source classification,
+GitHub upstream suggestions, manually confirmed release tracking, retained
+update preparation, and an explicitly approved APT handoff are implemented.
+The updater path has passed isolated real-transaction tests and package
+qualification across the declared support matrix; Beacon's release process
+will designate the first stable version.
 
 ## Compatibility and validation
 
 Beacon targets Debian/Ubuntu systems with Python 3.10 or newer, APT, and dpkg.
 Package CI builds and installs Beacon in pinned Debian 12/13 and Ubuntu
-22.04/24.04/26.04 container targets, runs the deterministic regression suite,
-and exercises the installed CLI, discovery inventories, and offline tracking
-removal. See the [Debian package workflow](.github/workflows/debian-package.yml)
-for current results; a listed target is not a claim that every run passes.
+22.04/24.04/26.04 container targets, runs the deterministic regression suite
+and isolated real APT/dpkg handoff tests, and exercises the installed CLI.
+See the [Debian package workflow](.github/workflows/debian-package.yml) for
+current results; a listed target is not a claim that every run passes.
 
 These are Linux amd64 container checks, not full desktop, derivative
 distribution, or other-architecture certification. Networked GitHub discovery
 and release inspection have separate live examples in the
 [discovery cases](docs/research/discovery-test-cases.md); CI does not depend
-on live GitHub search results or install third-party updates. Privileged APT
-safety experiments remain opt-in and are not part of this compatibility claim.
+on live GitHub search results or install third-party updates. The APT tests use
+local fixture packages inside bubblewrap and do not modify the host package
+database.
 
 ## Current Features
 
@@ -38,6 +42,8 @@ safety experiments remain opt-in and are not part of this compatibility claim.
 - Read-only GitHub upstream suggestions (`--suggest`)
 - Manually confirmed GitHub associations, release checks, and `.deb` asset suggestions
 - Temporary inspection of a user-selected GitHub `.deb` asset (`--inspect`)
+- Retained preparation of an exact user-selected release asset (`--prepare`)
+- Reviewed APT transaction and installation of a prepared update (`--install`)
 - Debian package build metadata for installing Beacon itself
 - Automated SemVer tags and GitHub Releases for qualifying merged pull requests
 
@@ -53,6 +59,8 @@ beacon --track <package> <owner/repository>
 beacon --tracked
 beacon --check <package>
 beacon --inspect <package> <exact-asset-filename.deb>
+beacon --prepare <package> <exact-asset-filename.deb>
+beacon --install <package>
 beacon --untrack <package>
 ```
 
@@ -76,8 +84,9 @@ unknown package/source; saved associations remain unchanged and commands are
 not retried automatically.
 
 `--untrack` shows the saved association and requires confirmation before
-removing it. It works offline and after the package has been uninstalled;
-it never uninstalls software. If multiple architectures are tracked, specify
+removing it; any prepared update for that association is removed too. It works
+offline and after the package has been uninstalled; it never uninstalls
+software. If multiple architectures are tracked, specify
 the exact `package:architecture` shown by `--tracked`. A missing association
 or an association changed by another process during confirmation is reported
 as an error rather than deleting a different entry.
@@ -112,6 +121,26 @@ the manifest can make them match. Only a file named `SHA256SUMS` with a
 supported exact-filename entry is checked; other checksum formats are not.
 The command does not check dependencies or
 execute package maintainer scripts, and never installs a package.
+
+`--prepare` downloads and retains the exact selected asset under
+`$XDG_DATA_HOME/beacon/updates` (default `~/.local/share/beacon/updates`).
+It records the release, asset URL, package metadata, digest, checksum evidence,
+and installed version. A failed checksum, package identity mismatch, or
+architecture mismatch blocks preparation. An unsigned checksum published
+alongside the asset is not independent publisher authentication.
+
+`--install` revalidates the prepared artifact and confirmed upstream, shows
+the APT dependency transaction, blocks removals and downgrades, and asks for
+fresh approval before invoking the packaged privileged helper through `sudo`.
+The helper stages a root-owned copy and enforces the reviewed transaction
+through APT's protocol-v3 pre-install hook. Package maintainer scripts run as
+root. Beacon trusts the administrator and root-run APT hooks; it does not
+protect against a malicious administrator or guarantee rollback. A failed
+APT operation can leave partial package state, which Beacon reports.
+Re-run `--check`, select and `--prepare` the desired asset, then review it
+again with `--install`; do not assume a failed installation was rolled back.
+The [APT handoff design](docs/design/apt-handoff.md) documents the trust
+boundary, safety mechanism, and remaining qualification requirements.
 
 ### Tracking-store errors and recovery
 
@@ -170,16 +199,10 @@ The first end-to-end milestone is to:
    confirm or correct it.
 3. Store the confirmed association and check upstream releases against the
    installed version, reporting uncertainty when versions cannot be compared.
-4. Present a suitable upstream download or release page for a real standalone
-   `.deb`. The initial milestone does not automatically download or install
-   updates.
-
-Later, Beacon may help select and download an appropriate `.deb` and hand it
-to APT for installation. Before any such handoff, the workflow must check the
-upstream identity, package identity and architecture, and available
-verification evidence; a confidence score alone is not proof of authenticity.
-Details of download verification and installation approval remain to be
-decided; see the [APT handoff safety design](docs/design/apt-handoff.md).
+4. Prepare a pinned, user-selected `.deb`, show APT's proposed dependency
+   changes, require fresh approval, install through APT, and verify the
+   installed result. See the [APT handoff safety design](docs/design/apt-handoff.md)
+   for its trust boundary, qualification record, and limitations.
 Beacon should surface ambiguity instead of guessing.
 
 An APT local or dpkg-only signal is a **candidate**, not proof that a package
@@ -214,4 +237,5 @@ an explicit version bump and release title.
 - Improve upstream suggestions with additional evidence and real-world cases.
 - Validate the end-to-end workflow against real standalone `.deb` packages and
   expand version comparison only where it is reliable.
-- Design safe update preparation and an APT handoff after tracking works.
+- Designate and publish the first stable updater version through the normal
+  project release process.
