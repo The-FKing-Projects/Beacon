@@ -285,6 +285,48 @@ def track(package, repository):
     print("Association saved.")
 
 
+def untrack(package):
+    if not PACKAGE_PATTERN.fullmatch(package):
+        raise TrackingError("Invalid Debian package name.")
+    name, _, architecture = package.partition(":")
+    with closing(open_database()) as db:
+        rows = db.execute(
+            "SELECT architecture, repository_name, repository_id FROM tracked_packages "
+            "WHERE package_name=? ORDER BY architecture",
+            (name,),
+        ).fetchall()
+        if architecture:
+            rows = [row for row in rows if row[0] == architecture]
+        if not rows:
+            raise TrackingError(f"No confirmed upstream for {package}.")
+        if len(rows) != 1:
+            raise TrackingError(
+                f"Multiple tracked architectures for {name}; specify package:architecture "
+                "from --tracked."
+            )
+        architecture, repository, identifier = rows[0]
+        print(f"Package: {name}:{architecture}")
+        print(f"Current association: https://github.com/{repository}")
+        print("Only the saved association will be removed; no package will be uninstalled.")
+        try:
+            answer = input("Remove this association? [y/N] ").strip().lower()
+        except EOFError as exc:
+            raise TrackingError("Confirmation required; association was not removed.") from exc
+        if answer not in ("y", "yes"):
+            print("Association not removed.")
+            return
+        with db:
+            db.execute("BEGIN IMMEDIATE")
+            result = db.execute(
+                "DELETE FROM tracked_packages WHERE package_name=? AND architecture=? "
+                "AND repository_name=? AND repository_id=?",
+                (name, architecture, repository, identifier),
+            )
+            if result.rowcount != 1:
+                raise TrackingError("Association changed during confirmation; review it and try again.")
+    print("Association removed.")
+
+
 def check(package):
     name, architecture, version = installed_package(package)
     with closing(open_database()) as db:

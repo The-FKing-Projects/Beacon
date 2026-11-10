@@ -7,6 +7,10 @@ smaller manual GitHub tracking store, but the schema and discovery persistence
 described below are not implemented. The current store records a package name
 and architecture and one explicitly confirmed GitHub repository name and ID;
 it does not record candidate evidence, rejected decisions, or scan snapshots.
+The `--untrack` command explicitly removes one confirmed association after
+confirmation, including for packages no longer installed. It resolves against
+saved records, requires an architecture when ambiguous, and refuses deletion
+if the selected repository identity changed during confirmation.
 
 The store keeps the latest successful package observation, proposed upstream
 repositories, and explicit user decisions. Package provenance and upstream

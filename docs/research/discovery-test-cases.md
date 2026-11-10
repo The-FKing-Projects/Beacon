@@ -91,3 +91,52 @@ No `SHA256SUMS` asset was available, and Beacon reported integrity as
 unverified. This digest records the observed download, not independent
 authenticity evidence. Inspection removed its temporary download and did
 not check dependencies, run maintainer scripts, or install a package.
+
+## Independent project: CloverEye
+
+On 2026-11-10 (UTC), the source checkout also exercised the workflow against
+the installed third-party package `clover-eye:amd64` version `0.1.1`.
+Discovery reported Local .deb Candidate, Medium (65/100), based on APT's
+local marker and no repository origin for the installed version.
+
+The package had no homepage metadata. `--suggest clover-eye` returned
+`MiguelCarino/CloverEye` as a low-confidence similar-name candidate, along
+with unrelated search-only alternatives. Removing a separator was not
+treated as an exact identity match. The repository's README independently
+described the same unofficial desktop client as the installed package's
+description, and its release listed a Debian download. This supported
+selecting it for the test; it did not authenticate the installed artifact
+or prove its historical origin.
+
+Using a fresh temporary `XDG_STATE_HOME`, separate CLI processes ran:
+
+```sh
+beacon --track clover-eye MiguelCarino/CloverEye
+beacon --tracked
+beacon --check clover-eye
+beacon --inspect clover-eye clovereye_0.1.1_amd64.deb
+beacon --tracked
+```
+
+The association was explicitly confirmed in test state, persisted across
+processes, and remained unchanged after inspection. The release check found
+[`v0.1.1`](https://github.com/MiguelCarino/CloverEye/releases/tag/v0.1.1),
+reported matching versions, and suggested `clovereye_0.1.1_amd64.deb`.
+Although its filename omits the package name's hyphen, inspection found
+the exact internal package identity `clover-eye:amd64` version `0.1.1`.
+Full Debian version comparison correctly reported the same version, not
+an available upgrade.
+
+The asset's SHA-256 was
+`64d4ea8f65383ea568bce32cc862eb608bf50f0575b315f27179abe1769082e9`
+and matched the release's `SHA256SUMS` entry. Beacon explicitly described
+that match as unauthenticated: publishing the checksum alongside the asset
+does not independently prove authenticity or dependency compatibility.
+The temporary download and test tracking state were removed; the user's
+tracking database and installed packages were unchanged.
+
+Together, the Beacon and CloverEye cases cover a newer available version,
+an already-current upstream version, ambiguous generic-name search, a
+separator-only name suggestion, and releases with and without a supported
+checksum manifest. They do not establish support for all projects, release
+formats, or Debian/Ubuntu versions.

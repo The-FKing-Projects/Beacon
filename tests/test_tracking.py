@@ -124,6 +124,101 @@ class TrackingTest(unittest.TestCase):
         with contextlib.closing(tracking.open_database()) as db:
             self.assertEqual(db.execute("SELECT COUNT(*) FROM tracked_packages").fetchone()[0], 1)
 
+    def save_association(self, architecture="amd64", repository="Owner/Project", identifier=123):
+        with contextlib.closing(tracking.open_database()) as db, db:
+            db.execute("INSERT INTO tracked_packages VALUES (?, ?, ?, ?)",
+                       ("app", architecture, identifier, repository))
+
+    def test_untrack_is_offline_and_independent_of_installed_state(self):
+        self.save_association()
+        self.save_association("arm64")
+        with patch("tracking.installed_package", side_effect=AssertionError("dpkg not needed")), \
+             patch("tracking.github_get", side_effect=AssertionError("network not needed")), \
+             patch("builtins.input", return_value="YES"), \
+             contextlib.redirect_stdout(io.StringIO()) as output:
+            tracking.untrack("app:amd64")
+        self.assertIn("Current association: https://github.com/Owner/Project", output.getvalue())
+        self.assertIn("no package will be uninstalled", output.getvalue())
+        self.assertIn("Association removed.", output.getvalue())
+        with contextlib.closing(tracking.open_database()) as db:
+            self.assertEqual(db.execute("SELECT architecture FROM tracked_packages").fetchall(),
+                             [("arm64",)])
+
+    def test_untrack_requires_unambiguous_saved_architecture(self):
+        self.save_association()
+        self.save_association("arm64")
+        with patch("builtins.input", side_effect=AssertionError("must not prompt")):
+            with self.assertRaisesRegex(tracking.TrackingError, "Multiple tracked architectures"):
+                tracking.untrack("app")
+            for package in ("missing", "app:i386"):
+                with self.subTest(package=package):
+                    with self.assertRaisesRegex(tracking.TrackingError, "No confirmed upstream"):
+                        tracking.untrack(package)
+            for package in ("app*", "app:", "app:amd64:arm64"):
+                with self.subTest(package=package):
+                    with self.assertRaisesRegex(tracking.TrackingError, "Invalid Debian package name"):
+                        tracking.untrack(package)
+        with contextlib.closing(tracking.open_database()) as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM tracked_packages").fetchone()[0], 2)
+
+    def test_untrack_decline_and_missing_confirmation_preserve_association(self):
+        self.save_association()
+        for answer in ("", "no", "invalid"):
+            with self.subTest(answer=answer), patch("builtins.input", return_value=answer), \
+                 contextlib.redirect_stdout(io.StringIO()) as output:
+                tracking.untrack("app")
+                self.assertIn("Association not removed.", output.getvalue())
+        with patch("builtins.input", side_effect=EOFError), \
+             contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(tracking.TrackingError, "Confirmation required"):
+                tracking.untrack("app")
+        with contextlib.closing(tracking.open_database()) as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM tracked_packages").fetchone()[0], 1)
+
+    def test_untrack_does_not_remove_concurrently_changed_association(self):
+        self.save_association()
+
+        def change_during_confirmation(_):
+            with contextlib.closing(tracking.open_database()) as db, db:
+                db.execute("UPDATE tracked_packages SET repository_name=?, repository_id=?",
+                           ("Other/Project", 456))
+            return "yes"
+
+        with patch("builtins.input", side_effect=change_during_confirmation), \
+             contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(tracking.TrackingError, "changed during confirmation"):
+                tracking.untrack("app")
+        with contextlib.closing(tracking.open_database()) as db:
+            self.assertEqual(db.execute("SELECT repository_name, repository_id FROM tracked_packages").fetchone(),
+                             ("Other/Project", 456))
+
+    def test_cli_untrack_and_list(self):
+        self.save_association()
+        with patch("builtins.input", return_value="y"), \
+             contextlib.redirect_stdout(io.StringIO()) as output:
+            with patch.object(sys, "argv", ["beacon", "--untrack", "app"]):
+                beacon.main()
+            with patch.object(sys, "argv", ["beacon", "--tracked"]):
+                beacon.main()
+        self.assertIn("Association removed.", output.getvalue())
+        self.assertIn("No confirmed upstream associations.", output.getvalue())
+
+    def test_cli_untrack_errors_and_help(self):
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            beacon.help_menu()
+        self.assertIn("--untrack <package>", output.getvalue())
+        for args, message in (
+            (["--untrack"], "Invalid arguments"),
+            (["--untrack", "app", "extra"], "Invalid arguments"),
+            (["--untrack", "app"], "No confirmed upstream"),
+        ):
+            with self.subTest(args=args), patch.object(sys, "argv", ["beacon", *args]), \
+                 contextlib.redirect_stderr(io.StringIO()) as error:
+                with self.assertRaises(SystemExit) as exc:
+                    beacon.main()
+                self.assertEqual(exc.exception.code, 1)
+                self.assertIn(message, error.getvalue())
+
     def test_confirmation_is_required(self):
         with patch("tracking.installed_package", return_value=("app", "amd64", "1.2.3")), \
              patch("tracking.resolve_repository", return_value=("Owner/Project", 123)), \

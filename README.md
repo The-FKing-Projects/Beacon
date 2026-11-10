@@ -37,6 +37,7 @@ beacon --track <package> <owner/repository>
 beacon --tracked
 beacon --check <package>
 beacon --inspect <package> <exact-asset-filename.deb>
+beacon --untrack <package>
 ```
 
 Verify the repository is the package's upstream before confirming it. Beacon
@@ -52,6 +53,13 @@ specify `package:architecture` if more than one architecture is installed.
 Associations are saved per user under `$XDG_STATE_HOME/beacon/tracking.sqlite3`
 (default `~/.local/state/beacon/tracking.sqlite3`). Re-running `--track`
 requires confirmation before replacing an association.
+
+`--untrack` shows the saved association and requires confirmation before
+removing it. It works offline and after the package has been uninstalled;
+it never uninstalls software. If multiple architectures are tracked, specify
+the exact `package:architecture` shown by `--tracked`. A missing association
+or an association changed by another process during confirmation is reported
+as an error rather than deleting a different entry.
 
 Checks query the public GitHub API without authentication and show the latest
 published stable release and its `.deb` assets. Beacon suggests likely assets
