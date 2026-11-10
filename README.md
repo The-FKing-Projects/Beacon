@@ -83,8 +83,10 @@ when the filename resembles the installed package name and specifies a
 matching architecture (or `all`); it also shows other `.deb` assets for manual
 review and flags multiple likely candidates. Filenames are only hints: this
 check does not verify asset contents, compatibility, package identity, or integrity.
-Network errors, rate limits, unavailable releases, and changed repository
-identities are reported. Version comparison is limited to three-component
+Network errors, interrupted API responses, rate limits, unavailable releases,
+and changed repository identities are reported without replacing saved
+associations. Failed requests are not retried automatically; retry the command
+after connectivity recovers or the rate limit clears. Version comparison is limited to three-component
 numeric versions with an optional `v` prefix. Installed versions may also have
 a numeric Debian revision: `0.8.1-1` versus `v0.8.2` reports a newer upstream
 release. These checks explicitly compare only the upstream version, not the

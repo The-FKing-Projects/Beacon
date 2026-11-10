@@ -3,6 +3,7 @@
 import json
 import os
 from contextlib import closing
+from http.client import HTTPException
 from pathlib import Path
 import re
 import sqlite3
@@ -152,7 +153,7 @@ def github_get(path):
             detail += "; check rate limits and retry later"
         exc.close()
         raise TrackingError(detail + ".") from exc
-    except (URLError, OSError, ValueError) as exc:
+    except (URLError, OSError, ValueError, HTTPException) as exc:
         raise TrackingError(f"GitHub request failed: {exc}") from exc
     if not isinstance(data, dict):
         raise TrackingError("Unexpected GitHub response.")

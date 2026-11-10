@@ -1,5 +1,6 @@
 import contextlib
 import io
+from http.client import BadStatusLine, IncompleteRead, RemoteDisconnected
 import os
 from pathlib import Path
 import sqlite3
@@ -7,7 +8,7 @@ import sys
 import tempfile
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from urllib.error import HTTPError, URLError
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -354,6 +355,60 @@ class TrackingTest(unittest.TestCase):
         with patch("tracking.urlopen", side_effect=URLError("offline")):
             with self.assertRaisesRegex(tracking.TrackingError, "offline"):
                 tracking.github_get("/repos/a/b")
+
+    def test_interrupted_github_responses_are_reported_and_closed(self):
+        for error in (IncompleteRead(b"{", 20), RemoteDisconnected("connection lost"),
+                      BadStatusLine("invalid status")):
+            for stage in ("connect", "read"):
+                with self.subTest(error=type(error).__name__, stage=stage):
+                    response = MagicMock()
+                    response.geturl.return_value = "https://api.github.com/repos/a/b"
+                    response.read.side_effect = error
+                    response.__enter__.return_value = response
+                    with patch("tracking.urlopen", return_value=response) as request:
+                        if stage == "connect":
+                            request.side_effect = error
+                        with self.assertRaisesRegex(tracking.TrackingError, "GitHub request failed") as caught:
+                            tracking.github_get("/repos/a/b")
+                    self.assertIs(caught.exception.__cause__, error)
+                    if stage == "read":
+                        response.__exit__.assert_called_once()
+
+    def test_cli_interrupted_requests_preserve_saved_associations(self):
+        self.save_association()
+        path = tracking.database_path()
+        before = path.read_bytes()
+        commands = [
+            ["--suggest", "app"],
+            ["--track", "app", "Other/Project"],
+            ["--check", "app"],
+            ["--inspect", "app", "app_1.2.4_amd64.deb"],
+        ]
+        for args in commands:
+            with self.subTest(args=args), \
+                 patch.object(sys, "argv", ["beacon", *args]), \
+                 patch("tracking.installed_package", return_value=("app", "amd64", "1.2.3")), \
+                 patch("suggestions.package_homepage", return_value=""), \
+                 patch("tracking.urlopen", side_effect=IncompleteRead(b"{", 20)), \
+                 patch("builtins.input", side_effect=AssertionError("must not prompt")), \
+                 contextlib.redirect_stderr(io.StringIO()) as error, \
+                 contextlib.redirect_stdout(io.StringIO()):
+                with self.assertRaises(SystemExit) as result:
+                    beacon.main()
+                self.assertEqual(result.exception.code, 1)
+                self.assertIn("Error: GitHub request failed:", error.getvalue())
+                self.assertNotIn("Traceback", error.getvalue())
+                self.assertEqual(path.read_bytes(), before)
+
+    def test_interrupted_release_lookup_preserves_repository_rename(self):
+        self.save_association()
+        before = tracking.database_path().read_bytes()
+        with patch("tracking.installed_package", return_value=("app", "amd64", "1.2.3")), \
+             patch("tracking.resolve_repository", return_value=("Owner/Renamed", 123)), \
+             patch("tracking.urlopen", side_effect=IncompleteRead(b"{", 20)):
+            with self.assertRaisesRegex(tracking.TrackingError, "GitHub request failed"):
+                tracking.check("app")
+        self.assertEqual(tracking.database_path().read_bytes(), before)
 
     def test_cli_tracking_flow(self):
         package_output = SimpleNamespace(
