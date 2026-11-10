@@ -1,3 +1,9 @@
+beacon (0.9.4-1) unstable; urgency=medium
+
+  * Release for workflow run 42764989348: Bounded package discovery commands.
+
+ -- The FK'ing Projects <FiendKing04@gmail.com>  Tue, 10 Nov 2026 05:54:11 +0000
+
 beacon (0.9.3-1) unstable; urgency=medium
 
   * Release for workflow run 42757148089: Bound installed package metadata queries.
