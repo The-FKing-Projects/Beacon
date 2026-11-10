@@ -10,6 +10,22 @@ source classification, GitHub upstream suggestions, and manually confirmed
 release tracking work today. Beacon can inspect a user-selected release asset;
 automatic upstream approval and installation are not implemented.
 
+## Compatibility and validation
+
+Beacon targets Debian/Ubuntu systems with Python 3.10 or newer, APT, and dpkg.
+Package CI builds and installs Beacon in pinned Debian 12/13 and Ubuntu
+22.04/24.04/26.04 container targets, runs the deterministic regression suite,
+and exercises the installed CLI, discovery inventories, and offline tracking
+removal. See the [Debian package workflow](.github/workflows/debian-package.yml)
+for current results; a listed target is not a claim that every run passes.
+
+These are Linux amd64 container checks, not full desktop, derivative
+distribution, or other-architecture certification. Networked GitHub discovery
+and release inspection have separate live examples in the
+[discovery cases](docs/research/discovery-test-cases.md); CI does not depend
+on live GitHub search results or install third-party updates. Privileged APT
+safety experiments remain opt-in and are not part of this compatibility claim.
+
 ## Current Features
 
 - Package inspection

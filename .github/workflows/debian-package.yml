@@ -1,11 +1,22 @@
 name: Debian package
 
 on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/debian-package.yml"
+      - "debian/**"
+      - "src/**"
+      - "tests/**"
+      - "scripts/release.py"
   pull_request:
     paths:
       - ".github/workflows/debian-package.yml"
       - "debian/**"
       - "src/**"
+      - "tests/**"
       - "scripts/release.py"
 
 permissions:
@@ -14,14 +25,31 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - debian:12
+          - debian:13
+          - ubuntu:22.04
+          - ubuntu:24.04
+          - ubuntu:26.04
+    container: ${{ matrix.image }}
+    env:
+      LC_ALL: C
+      PYTHONDONTWRITEBYTECODE: "1"
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4
 
       - name: Install Debian packaging tools
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends build-essential debhelper dpkg-dev
+          apt-get update
+          apt-get install -y --no-install-recommends build-essential debhelper dpkg-dev python3 ca-certificates
+
+      - name: Run deterministic regression tests
+        run: python3 -m unittest discover -s tests -v
 
       - name: Build the binary package
         run: dpkg-buildpackage -us -uc -b
@@ -31,13 +59,5 @@ jobs:
           package="../beacon_$(dpkg-parsechangelog -SVersion)_all.deb"
           dpkg-deb --info "$package"
           dpkg-deb --contents "$package"
-          sudo apt install -y "$package"
-          beacon --version
-          help_output="$(beacon --help)"
-          printf '%s\n' "$help_output"
-          ! grep -Fq 'beacon.py' <<< "$help_output"
-          grep -Fq 'beacon --scan' <<< "$help_output"
-          beacon --scan
-          beacon --repos
-          beacon --clean
-          beacon --local
+          apt-get install -y "$package"
+          python3 tests/smoke_installed.py
