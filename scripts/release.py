@@ -56,29 +56,35 @@ def update_version_text(source, version):
     return updated
 
 
-def update_changelog_version_text(source, version, title, pr_number):
+def update_changelog_version_text(source, version, title, pr_number, manual_run_id=None):
     if CHANGELOG_VERSION_PATTERN.search(source) is None:
         raise ValueError("Expected a Beacon Debian changelog entry")
     if "\n" in title or "\r" in title:
         raise ValueError("Release title cannot contain line breaks")
     date = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S +0000")
+    origin = (
+        f"workflow run {manual_run_id}" if manual_run_id is not None
+        else f"pull request #{pr_number}"
+    )
     entry = (
         f"beacon ({version}-1) unstable; urgency=medium\n\n"
-        f"  * Release for pull request #{pr_number}: {title}.\n\n"
+        f"  * Release for {origin}: {title}.\n\n"
         f" -- The FK'ing Projects <FiendKing04@gmail.com>  {date}\n\n"
     )
     return entry + source
 
 
 def find_tag_for_pr(pr_number):
+    return find_tag_for_marker(f"Beacon-PR: #{pr_number}")
+
+
+def find_tag_for_marker(marker):
     result = subprocess.run(
         ["git", "tag", "--list", "v[0-9]*"],
         check=True,
         capture_output=True,
         text=True,
     )
-    marker = f"Beacon-PR: #{pr_number}"
-
     for tag in result.stdout.splitlines():
         tag_type = subprocess.run(
             ["git", "cat-file", "-t", f"refs/tags/{tag}"],
@@ -111,9 +117,24 @@ def write_outputs(outputs):
         print(json.dumps(outputs))
 
 
-def prepare_release(title, body, pr_number, version_file, changelog_file=None):
-    existing_tag = find_tag_for_pr(pr_number)
+def prepare_release(title, body, pr_number, version_file, changelog_file=None,
+                    manual_run_id=None, manual_bump=None):
+    if not title.strip() or "\n" in title or "\r" in title:
+        raise ValueError("Release title must be nonempty and contain no line breaks")
+    if manual_run_id is not None:
+        if (pr_number is not None or not re.fullmatch(r"[1-9][0-9]*", str(manual_run_id))
+                or manual_bump not in {"patch", "minor", "major"}):
+            raise ValueError("Manual releases require a positive run ID and an explicit version bump")
+        existing_tag = find_tag_for_marker(f"Beacon-Manual-Run: {manual_run_id}")
+        bump = manual_bump
+    else:
+        if pr_number is None or pr_number <= 0 or manual_bump is not None:
+            raise ValueError("Automated releases require a positive pull request number")
+        existing_tag = find_tag_for_pr(pr_number)
+        bump = classify_bump(title, body)
     if existing_tag:
+        if not VERSION_PATTERN_STRICT.fullmatch(existing_tag[1:]):
+            raise ValueError(f"Invalid existing release tag: {existing_tag}")
         write_outputs(
             {
                 "release": "true",
@@ -125,7 +146,6 @@ def prepare_release(title, body, pr_number, version_file, changelog_file=None):
         )
         return
 
-    bump = classify_bump(title, body)
     if bump is None:
         write_outputs({"release": "false"})
         return
@@ -146,6 +166,7 @@ def prepare_release(title, body, pr_number, version_file, changelog_file=None):
             version,
             title,
             pr_number,
+            manual_run_id=manual_run_id,
         )
     path.write_text(update_version_text(source, version), encoding="utf-8")
     if changelog_path and updated_changelog is not None:
@@ -165,7 +186,10 @@ def main():
     parser = argparse.ArgumentParser(description="Prepare an automated Beacon release")
     parser.add_argument("--title", required=True)
     parser.add_argument("--body", default="")
-    parser.add_argument("--pr-number", required=True, type=int)
+    origin = parser.add_mutually_exclusive_group(required=True)
+    origin.add_argument("--pr-number", type=int)
+    origin.add_argument("--manual-run-id", type=int)
+    parser.add_argument("--bump", choices=("patch", "minor", "major"))
     parser.add_argument("--version-file", default="src/beacon.py")
     parser.add_argument("--changelog-file")
     args = parser.parse_args()
@@ -176,6 +200,8 @@ def main():
         args.pr_number,
         args.version_file,
         args.changelog_file,
+        manual_run_id=args.manual_run_id,
+        manual_bump=args.bump,
     )
 
 

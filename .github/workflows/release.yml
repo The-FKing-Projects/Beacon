@@ -1,6 +1,20 @@
 name: Release
 
 on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Semantic version bump for changes already on main
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      title:
+        description: Short description of the changes being released
+        required: true
+        type: string
   push:
     branches:
       - main
@@ -15,7 +29,7 @@ concurrency:
 
 jobs:
   release:
-    if: github.event.deleted == false
+    if: github.event.deleted == false && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Check out the repository
@@ -23,17 +37,42 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Find the merged pull request
+      - name: Identify the release source
         id: pull-request
         env:
           GH_TOKEN: ${{ github.token }}
           COMMIT_SHA: ${{ github.event.after }}
+          EVENT_NAME: ${{ github.event_name }}
+          MANUAL_TITLE: ${{ inputs.title }}
+          MANUAL_BUMP: ${{ inputs.bump }}
         run: |
           python3 - <<'PY'
           import json
           import os
           import subprocess
           import uuid
+
+          if os.environ["EVENT_NAME"] == "workflow_dispatch":
+              title = os.environ["MANUAL_TITLE"]
+              bump = os.environ["MANUAL_BUMP"]
+              if not title.strip() or "\n" in title or "\r" in title:
+                  raise SystemExit("Release title must be nonempty and contain no line breaks.")
+              if bump not in ("patch", "minor", "major"):
+                  raise SystemExit("Choose an explicit patch, minor, or major version bump.")
+              values = {
+                  "found": "true",
+                  "title": title,
+                  "body": "",
+                  "number": "",
+                  "manual_run_id": os.environ["GITHUB_RUN_ID"],
+                  "reference": f"workflow run {os.environ['GITHUB_RUN_ID']}",
+                  "marker": f"Beacon-Manual-Run: {os.environ['GITHUB_RUN_ID']}",
+              }
+              with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+                  for name, value in values.items():
+                      delimiter = f"EOF_{uuid.uuid4().hex}"
+                      output.write(f"{name}<<{delimiter}\n{value}\n{delimiter}\n")
+              raise SystemExit(0)
 
           result = subprocess.run(
               [
@@ -71,6 +110,9 @@ jobs:
               "number": str(pull_request["number"]),
               "title": pull_request["title"],
               "body": pull_request.get("body") or "",
+              "manual_run_id": "",
+              "reference": f"#{pull_request['number']}",
+              "marker": f"Beacon-PR: #{pull_request['number']}",
           }
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               for name, value in values.items():
@@ -85,13 +127,20 @@ jobs:
           PR_TITLE: ${{ steps.pull-request.outputs.title }}
           PR_BODY: ${{ steps.pull-request.outputs.body }}
           PR_NUMBER: ${{ steps.pull-request.outputs.number }}
+          MANUAL_RUN_ID: ${{ steps.pull-request.outputs.manual_run_id }}
+          MANUAL_BUMP: ${{ inputs.bump }}
         run: |
           git fetch origin main --tags
           git checkout -B release-main origin/main
+          if [ -n "$MANUAL_RUN_ID" ]; then
+            origin=(--manual-run-id "$MANUAL_RUN_ID" --bump "$MANUAL_BUMP")
+          else
+            origin=(--pr-number "$PR_NUMBER")
+          fi
           python3 scripts/release.py \
             --title "$PR_TITLE" \
             --body "$PR_BODY" \
-            --pr-number "$PR_NUMBER" \
+            "${origin[@]}" \
             --version-file src/beacon.py \
             --changelog-file debian/changelog
 
@@ -101,33 +150,41 @@ jobs:
           VERSION: ${{ steps.plan.outputs.version }}
           TAG: ${{ steps.plan.outputs.tag }}
           BUMP: ${{ steps.plan.outputs.bump }}
-          PR_NUMBER: ${{ steps.pull-request.outputs.number }}
+          RELEASE_REFERENCE: ${{ steps.pull-request.outputs.reference }}
+          RELEASE_MARKER: ${{ steps.pull-request.outputs.marker }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/beacon.py debian/changelog
           git commit \
             -m "chore(release): v$VERSION" \
-            -m "SemVer $BUMP release for pull request #$PR_NUMBER."
-          git tag -a "$TAG" -m "Beacon $TAG" -m "Beacon-PR: #$PR_NUMBER"
+            -m "SemVer $BUMP release for $RELEASE_REFERENCE."
+          git tag -a "$TAG" -m "Beacon $TAG" -m "$RELEASE_MARKER"
           git push --atomic origin HEAD:main "refs/tags/$TAG"
+
+      - name: Check out the exact release tag
+        if: steps.plan.outputs.release == 'true'
+        env:
+          TAG: ${{ steps.plan.outputs.tag }}
+        run: git checkout --detach "$TAG"
 
       - name: Publish GitHub Release
         if: steps.plan.outputs.release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.plan.outputs.tag }}
-          PR_NUMBER: ${{ steps.pull-request.outputs.number }}
+          RELEASE_REFERENCE: ${{ steps.pull-request.outputs.reference }}
           PR_TITLE: ${{ steps.pull-request.outputs.title }}
         run: |
-          if gh release view "$TAG" >/dev/null 2>&1; then
+          existing="$(gh release list --limit 1000 --json tagName --jq '.[].tagName')"
+          if printf '%s\n' "$existing" | grep -Fxq -- "$TAG"; then
             echo "Release $TAG already exists."
             exit 0
           fi
 
           gh release create "$TAG" \
             --title "Beacon $TAG" \
-            --notes "Automated release for #$PR_NUMBER: $PR_TITLE <!-- beacon-release-pr:$PR_NUMBER -->"
+            --notes "Release for $RELEASE_REFERENCE: $PR_TITLE"
 
       - name: Install Debian packaging tools
         if: steps.plan.outputs.release == 'true'

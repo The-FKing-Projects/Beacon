@@ -166,6 +166,62 @@ class ReleaseVersioningTest(unittest.TestCase):
             self.assertEqual(version_file.read_text(encoding="utf-8"), original_source)
             self.assertEqual(outputs, [{"release": "false"}])
 
+    def test_manual_release_uses_explicit_bump_and_run_identity(self):
+        for bump, version in (("patch", "0.8.3"), ("minor", "0.9.0"), ("major", "1.0.0")):
+            with self.subTest(bump=bump), tempfile.TemporaryDirectory() as directory:
+                version_file = Path(directory) / "beacon.py"
+                version_file.write_text('VERSION = "0.8.2"\n', encoding="utf-8")
+                changelog_file = Path(directory) / "changelog"
+                changelog_file.write_text("beacon (0.8.2-1) unstable; urgency=medium\n",
+                                          encoding="utf-8")
+                with patch("scripts.release.find_tag_for_marker", return_value=None) as lookup, \
+                     patch("scripts.release.write_outputs") as output:
+                    prepare_release("Ship tracking management", "", None, version_file,
+                                    changelog_file, manual_run_id=1234, manual_bump=bump)
+                lookup.assert_called_once_with("Beacon-Manual-Run: 1234")
+                self.assertEqual(version_file.read_text(), f'VERSION = "{version}"\n')
+                self.assertIn(f"beacon ({version}-1)", changelog_file.read_text())
+                self.assertIn("Release for workflow run 1234: Ship tracking management.",
+                              changelog_file.read_text())
+                self.assertEqual(output.call_args.args[0]["tag"], f"v{version}")
+                self.assertEqual(output.call_args.args[0]["reused"], "false")
+
+    def test_manual_rerun_reuses_original_tag_without_changing_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "beacon.py"
+            original = 'VERSION = "0.10.0"\n'
+            path.write_text(original, encoding="utf-8")
+            with patch("scripts.release.find_tag_for_marker", return_value="v0.9.0"), \
+                 patch("scripts.release.write_outputs") as output:
+                prepare_release("Ship tracking management", "", None, path,
+                                manual_run_id=1234, manual_bump="minor")
+            self.assertEqual(path.read_text(), original)
+            self.assertEqual(output.call_args.args[0]["tag"], "v0.9.0")
+            self.assertEqual(output.call_args.args[0]["reused"], "true")
+
+    def test_invalid_manual_requests_leave_files_unchanged(self):
+        cases = [
+            {"manual_run_id": 0, "manual_bump": "minor"},
+            {"manual_run_id": 1, "manual_bump": None},
+            {"manual_run_id": 1, "manual_bump": "hotfix"},
+            {"manual_run_id": None, "manual_bump": "minor"},
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "beacon.py"
+            original = 'VERSION = "0.8.2"\n'
+            path.write_text(original, encoding="utf-8")
+            for kwargs in cases:
+                with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
+                    prepare_release("Ship changes", "", None, path, **kwargs)
+                self.assertEqual(path.read_text(), original)
+            for title in ("", "  ", "Ship\nforged", "Ship\rforged"):
+                with self.subTest(title=title), self.assertRaises(ValueError):
+                    prepare_release(title, "", None, path, manual_run_id=1, manual_bump="minor")
+                self.assertEqual(path.read_text(), original)
+            with self.assertRaises(ValueError):
+                prepare_release("Ship changes", "", 42, path,
+                                manual_run_id=1, manual_bump="minor")
+
 
 if __name__ == "__main__":
     unittest.main()

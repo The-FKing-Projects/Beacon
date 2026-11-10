@@ -26,6 +26,32 @@ and its annotated `vX.Y.Z` tag to `main`. It then creates the matching GitHub
 Release. Tags include the originating PR number so a rerun can resume release
 publication without incrementing the version twice.
 
+## Manual releases
+
+Direct pushes to `main` do not automatically release. To publish changes
+already on `main`, run the **Release** workflow with its `workflow_dispatch`
+action, selecting the `main` branch, an explicit `patch`, `minor`, or `major`
+bump, and a short, single-line release title. For example:
+
+```sh
+gh workflow run release.yml --ref main \
+  -f bump=minor -f title="Tracking management and Debian revision comparison"
+```
+
+The workflow increments the current application version and Debian changelog
+together, pushes the release commit and annotated tag atomically, and builds
+and uploads the matching `.deb` using the same steps as PR-triggered releases.
+Manual titles describe the release; their prefixes do not determine the bump.
+The workflow refuses to release from a branch other than `main`.
+
+Manual tags record `Beacon-Manual-Run: <run-id>` rather than a fabricated PR
+number. **Rerun the same Actions run** to resume a failed publication without
+another version bump. Dispatching a new run intentionally requests a new
+release and increments again. Both manual and PR reruns build from the exact
+original release tag, not newer `main` contents. Release executions share one
+concurrency group; a concurrent external push can still make the atomic push
+fail safely, in which case rerun after reviewing the updated `main`.
+
 ## Repository Configuration
 
 The workflow requests only `contents: write` and `pull-requests: read`. In
@@ -38,5 +64,5 @@ protection or repository rulesets must allow the GitHub Actions bot to update
 neither the version commit nor tag is published. Configure a narrowly scoped
 exception for GitHub Actions rather than disabling branch protection.
 
-The workflow intentionally skips commits that are not associated with one
+For push events, the workflow intentionally skips commits that are not associated with one
 merged pull request targeting `main`, and it skips non-release title types.

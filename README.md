@@ -163,7 +163,9 @@ Merged `feat:` pull requests trigger a minor release; `fix:` and `perf:`
 trigger patch releases. A `!` marker or `BREAKING CHANGE:` footer triggers a
 major release. Documentation, tests, and other non-feature changes do not
 release by default. See [automated release details](docs/research/release-automation.md)
-for the required repository settings.
+for the required repository settings. Direct pushes do not automatically
+release; the **Release** workflow also supports a manual run on `main` with
+an explicit version bump and release title.
 
 ## Next steps
 
