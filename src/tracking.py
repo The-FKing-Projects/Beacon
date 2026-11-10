@@ -47,9 +47,9 @@ def installed_package(name):
     try:
         result = subprocess.run(
             ["dpkg-query", "-W", "-f", "${binary:Package}\t${Architecture}\t${db:Status-Status}\t${Version}\n", name],
-            capture_output=True, text=True, check=False,
+            capture_output=True, text=True, timeout=15, check=False,
         )
-    except OSError as exc:
+    except (OSError, subprocess.TimeoutExpired) as exc:
         raise TrackingError(f"Unable to run dpkg-query: {exc}") from exc
     requested_name, _, requested_arch = name.partition(":")
     matches = []

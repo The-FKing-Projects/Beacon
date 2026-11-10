@@ -45,6 +45,37 @@ class TrackingTest(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(tracking.TrackingError):
                 tracking.repository_name(value)
 
+    def test_installed_package_query_has_bounded_timeout(self):
+        error = tracking.subprocess.TimeoutExpired("dpkg-query", 15)
+        with patch("tracking.subprocess.run", side_effect=error) as query:
+            with self.assertRaisesRegex(tracking.TrackingError, "Unable to run dpkg-query") as caught:
+                tracking.installed_package("app")
+        self.assertIs(caught.exception.__cause__, error)
+        self.assertEqual(query.call_args.kwargs["timeout"], 15)
+
+    def test_cli_package_query_timeouts_preserve_tracking_decisions(self):
+        self.save_association()
+        path = tracking.database_path()
+        before = path.read_bytes()
+        for args in (
+            ["--track", "app", "Other/Project"],
+            ["--check", "app"],
+            ["--suggest", "app"],
+            ["--inspect", "app", "app_1.2.4_amd64.deb"],
+        ):
+            with self.subTest(args=args), patch.object(sys, "argv", ["beacon", *args]), \
+                 patch("tracking.subprocess.run",
+                       side_effect=tracking.subprocess.TimeoutExpired("dpkg-query", 15)), \
+                 patch("tracking.github_get", side_effect=AssertionError("must not query GitHub")), \
+                 patch("builtins.input", side_effect=AssertionError("must not prompt")), \
+                 contextlib.redirect_stderr(io.StringIO()) as error:
+                with self.assertRaises(SystemExit) as result:
+                    beacon.main()
+                self.assertEqual(result.exception.code, 1)
+                self.assertIn("Unable to run dpkg-query", error.getvalue())
+                self.assertNotIn("Traceback", error.getvalue())
+                self.assertEqual(path.read_bytes(), before)
+
     def test_version_comparison_is_conservative(self):
         cases = {
             ("1.2.3", "v1.2.4"): "Newer upstream release available.",

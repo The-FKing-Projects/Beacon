@@ -69,6 +69,28 @@ class SuggestionsTest(unittest.TestCase):
         self.assertIn("first 3 of 40", result)
         self.assertIn("Nothing was saved.", result)
 
+    def test_homepage_query_timeout_is_bounded_and_reported(self):
+        error = suggestions.subprocess.TimeoutExpired("dpkg-query", 15)
+        with patch("suggestions.subprocess.run", side_effect=error) as query:
+            with self.assertRaisesRegex(tracking.TrackingError, "Unable to read package homepage") as caught:
+                suggestions.package_homepage("app", "amd64")
+        self.assertIs(caught.exception.__cause__, error)
+        self.assertEqual(query.call_args.kwargs["timeout"], 15)
+
+    def test_cli_homepage_timeout_prevents_search_or_database_writes(self):
+        with patch.object(sys, "argv", ["beacon", "--suggest", "app"]), \
+             patch("tracking.installed_package", return_value=("app", "amd64", "1.2.3")), \
+             patch("suggestions.subprocess.run",
+                   side_effect=suggestions.subprocess.TimeoutExpired("dpkg-query", 15)), \
+             patch("tracking.github_get", side_effect=AssertionError("must not query GitHub")), \
+             patch("tracking.open_database", side_effect=AssertionError("must not open store")), \
+             contextlib.redirect_stderr(io.StringIO()) as error:
+            with self.assertRaises(SystemExit) as result:
+                beacon.main()
+        self.assertEqual(result.exception.code, 1)
+        self.assertIn("Unable to read package homepage", error.getvalue())
+        self.assertNotIn("Traceback", error.getvalue())
+
     def test_clovereye_similarity_is_not_exact(self):
         rank, evidence = suggestions.name_evidence("clover-eye", "MiguelCarino/CloverEye")
         self.assertEqual(rank, 1)
