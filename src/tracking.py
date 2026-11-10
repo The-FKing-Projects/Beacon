@@ -226,17 +226,27 @@ def print_deb_assets(assets, package, architecture):
 
 
 def compare_versions(installed, tag):
-    left = VERSION_PATTERN.fullmatch(installed)
+    upstream, separator, revision = installed.partition("-")
+    if separator and not re.fullmatch(r"[0-9]+", revision):
+        return "Unknown: versions cannot be compared safely."
+    left = VERSION_PATTERN.fullmatch(upstream)
     right = VERSION_PATTERN.fullmatch(tag)
     if not left or not right:
         return "Unknown: versions cannot be compared safely."
     current = tuple(map(int, left.groups()))
     latest = tuple(map(int, right.groups()))
     if latest > current:
-        return "Newer upstream release available."
-    if latest == current:
-        return "Versions match."
-    return "Installed version is newer than the latest upstream release."
+        status = "Newer upstream release available."
+    elif latest == current:
+        status = "Upstream versions match." if separator else "Versions match."
+    else:
+        status = "Installed version is newer than the latest upstream release."
+    if separator:
+        status += (
+            f" Comparing upstream versions only; installed Debian revision {revision}"
+            " is not compared."
+        )
+    return status
 
 
 def track(package, repository):

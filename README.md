@@ -61,8 +61,14 @@ review and flags multiple likely candidates. Filenames are only hints: this
 check does not verify asset contents, compatibility, package identity, or integrity.
 Network errors, rate limits, unavailable releases, and changed repository
 identities are reported. Version comparison is limited to three-component
-numeric versions with an optional `v` prefix; Debian revisions and other tags
-are reported as unknown.
+numeric versions with an optional `v` prefix. Installed versions may also have
+a numeric Debian revision: `0.8.1-1` versus `v0.8.2` reports a newer upstream
+release. These checks explicitly compare only the upstream version, not the
+Debian revision or a release asset's package version; equal upstream versions
+do not establish that the packages are identical or equally current. Epochs,
+distro-specific revisions such as `-1ubuntu1`, prereleases, and other tag
+formats are reported as unknown. Use `--inspect` for the selected asset's full
+Debian version comparison.
 
 `--inspect` downloads the exact named asset from the tracked repository's
 latest stable release into a temporary directory, compares its package name,

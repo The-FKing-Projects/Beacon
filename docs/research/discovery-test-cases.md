@@ -57,3 +57,37 @@ Run the deterministic fixtures with:
 ```sh
 python3 -m unittest discover -s tests -v
 ```
+
+## Real standalone-package workflow
+
+On 2026-11-10 (UTC), the installed `beacon:all` package provided an end-to-end
+case without installing or upgrading anything. Commands ran from the source
+checkout as `python3 src/beacon.py`; the table uses the installed command's
+`beacon` spelling for readability.
+
+| Step | Observed result |
+| --- | --- |
+| `beacon beacon` | Installed `0.8.1-1`; Local .deb Candidate, Medium (65/100), based on APT's local marker and no installed-version repository origin |
+| `beacon --suggest beacon` | No package homepage; first-page name search returned multiple strongest matches and warned that no single upstream was identified |
+| `beacon --track beacon The-FKing-Projects/Beacon` | Explicitly confirmed the known project repository, rather than accepting an unrelated search result |
+| `beacon --tracked` in a separate process | The association persisted as `beacon:all` pointing to the confirmed repository |
+| `beacon --check beacon` | Found stable release `v0.8.2` and suggested `beacon_0.8.2-1_all.deb` by filename |
+| `beacon --inspect beacon beacon_0.8.2-1_all.deb` | Package name and `all` architecture matched; full Debian comparison found asset version `0.8.2-1` newer than installed `0.8.1-1` |
+
+The test used an isolated temporary `XDG_STATE_HOME` across separate CLI
+processes, then removed it; the user's tracking database was not changed.
+The supplied repository is Beacon's own project, not an automatically
+verified match. Search results and latest releases are time-sensitive.
+
+The initial release check reported an unknown version comparison for
+`0.8.1-1` versus `v0.8.2`. Numeric Debian revision support now compares the
+upstream portions and explicitly states that revision `1` is not compared.
+The deterministic tracking tests cover this case and retain unknown results
+for epochs, distro suffixes, prereleases, and unsupported release tags.
+
+The inspected asset's SHA-256 was
+`ab172d6374efe788741b828ea9a17c3d2a49b76a4697fdc4bb2ed7837838e421`.
+No `SHA256SUMS` asset was available, and Beacon reported integrity as
+unverified. This digest records the observed download, not independent
+authenticity evidence. Inspection removed its temporary download and did
+not check dependencies, run maintainer scripts, or install a package.

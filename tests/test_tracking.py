@@ -49,13 +49,43 @@ class TrackingTest(unittest.TestCase):
             ("1.2.3", "v1.2.4"): "Newer upstream release available.",
             ("1.2.3", "v1.2.3"): "Versions match.",
             ("1.2.4", "1.2.3"): "Installed version is newer than the latest upstream release.",
-            ("1.2.3-1", "v1.2.4"): "Unknown: versions cannot be compared safely.",
             ("1.2.3", "v1.2.4-beta"): "Unknown: versions cannot be compared safely.",
             ("1.2", "v1.2.3"): "Unknown: versions cannot be compared safely.",
+            ("1.2.3-1ubuntu1", "v1.2.4"): "Unknown: versions cannot be compared safely.",
+            ("1.2.3-1+b1", "v1.2.4"): "Unknown: versions cannot be compared safely.",
+            ("1.2.3-1~deb12u1", "v1.2.4"): "Unknown: versions cannot be compared safely.",
+            ("1:1.2.3-1", "v1.2.4"): "Unknown: versions cannot be compared safely.",
+            ("0:1.2.3-1", "v1.2.4"): "Unknown: versions cannot be compared safely.",
+            ("1.2.3~rc1-1", "v1.2.4"): "Unknown: versions cannot be compared safely.",
+            ("1.2.3-beta-1", "v1.2.4"): "Unknown: versions cannot be compared safely.",
+            ("1.2.3-", "v1.2.4"): "Unknown: versions cannot be compared safely.",
+            ("1.2.3-1-2", "v1.2.4"): "Unknown: versions cannot be compared safely.",
+            ("1.2.3-1", "v1.2.4-1"): "Unknown: versions cannot be compared safely.",
+            ("1.2.3-1", "v1.2.4-beta"): "Unknown: versions cannot be compared safely.",
+            ("01.2.3-1", "v1.2.4"): "Unknown: versions cannot be compared safely.",
         }
         for (installed, tag), expected in cases.items():
             with self.subTest(installed=installed, tag=tag):
                 self.assertEqual(tracking.compare_versions(installed, tag), expected)
+
+    def test_numeric_debian_revisions_compare_only_upstream(self):
+        cases = [
+            ("0.8.1-1", "v0.8.2", "Newer upstream release available.", "1"),
+            ("1.2.3-99", "v1.2.4", "Newer upstream release available.", "99"),
+            ("1.2.9-1", "v1.2.10", "Newer upstream release available.", "1"),
+            ("1.2.3-1", "v1.2.3", "Upstream versions match.", "1"),
+            ("1.2.3-0", "1.2.3", "Upstream versions match.", "0"),
+            ("1.2.3-01", "v1.2.3", "Upstream versions match.", "01"),
+            ("1.2.4-1", "v1.2.3",
+             "Installed version is newer than the latest upstream release.", "1"),
+        ]
+        for installed, tag, status, revision in cases:
+            with self.subTest(installed=installed, tag=tag):
+                self.assertEqual(
+                    tracking.compare_versions(installed, tag),
+                    f"{status} Comparing upstream versions only; installed Debian revision "
+                    f"{revision} is not compared.",
+                )
 
     def test_track_check_and_preserve_decisions(self):
         with patch("tracking.installed_package", return_value=("app", "amd64", "1.2.3")), \
@@ -128,7 +158,7 @@ class TrackingTest(unittest.TestCase):
 
     def test_cli_tracking_flow(self):
         package_output = SimpleNamespace(
-            stdout="app\tamd64\tinstalled\t1.2.3\n", stderr="", returncode=0
+            stdout="app\tamd64\tinstalled\t1.2.3-1\n", stderr="", returncode=0
         )
         responses = [
             {"full_name": "Owner/Project", "id": 123},
@@ -150,6 +180,7 @@ class TrackingTest(unittest.TestCase):
         self.assertIn("Association saved.", output.getvalue())
         self.assertIn("app:amd64  https://github.com/Owner/Project", output.getvalue())
         self.assertIn("Newer upstream release available.", output.getvalue())
+        self.assertIn("installed Debian revision 1 is not compared.", output.getvalue())
         self.assertIn("app_1.2.4_amd64.deb: Likely candidate", output.getvalue())
 
     def test_asset_filename_matching(self):
