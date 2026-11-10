@@ -104,9 +104,11 @@ or tunnel changes are needed.
 
 ### Server setup
 
-1. In this GitHub repository's **Settings → Actions → Runners**, add a Linux
-   self-hosted runner with the custom label `beacon-apt` (in addition to the
-   default `self-hosted` and `linux` labels).
+1. In the organization's **Settings → Actions → Runners**, register the Linux
+   runner `FK04-SERVER` with the custom label `fkingprojects-apt` (in addition
+   to the default `self-hosted`, `Linux`, and `X64` labels). Runner labels are
+   case-insensitive. Ensure its runner group grants this repository access;
+   public repositories may require an explicit group setting.
 2. Run its service as `github-runner` with access through the `aptly` group to
    the existing aptly repository and signing key. Ensure its `HOME`, aptly
    configuration, and GPG environment match
@@ -135,8 +137,8 @@ The publishing job itself does not check out or execute release-tag code and
 only runs from `main`, but these safeguards do not replace runner isolation.
 The runner label is routing, not an access-control boundary: other workflows
 must not target this runner, and runner groups should enforce that restriction
-where available. Install the runner as a service if publication must continue
-after the terminal running `./run.sh` closes.
+where available. `FK04-SERVER` runs as a systemd service under `github-runner`,
+so publication does not depend on an open terminal.
 
 ### Retries and coordination
 
