@@ -215,8 +215,11 @@ unisolated install if namespace setup fails.
 real-transaction tests, binary package build, helper packaging check, and
 installed-CLI smoke test passed on Debian 12, Debian 13, Ubuntu 22.04,
 Ubuntu 24.04, and Ubuntu 26.04 in amd64 Podman containers. The Debian package
-workflow runs the same matrix checks and requires the isolated tests; its
-results remain the CI release gate. Tests are opt-in for local runs:
+workflow repeats deterministic tests, package builds, and smoke tests across
+that five-target matrix. It runs the isolated APT suite separately on a native
+Ubuntu 24.04 GitHub-hosted VM because the nested distro containers prohibit
+Bubblewrap user namespaces; the isolated test step remains a required CI
+release gate. Tests are opt-in for local runs:
 
 ```sh
 BEACON_RUN_APT_HOOK_EXPERIMENTS=1 python3 -m unittest discover -s tests -p test_apt_hook_experiments.py -v

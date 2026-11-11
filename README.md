@@ -18,17 +18,19 @@ will designate the first stable version.
 Beacon targets Debian/Ubuntu systems with Python 3.10 or newer, APT, and dpkg.
 Package CI builds and installs Beacon in pinned Debian 12/13 and Ubuntu
 22.04/24.04/26.04 container targets, runs the deterministic regression suite
-and isolated real APT/dpkg handoff tests, and exercises the installed CLI.
-See the [Debian package workflow](.github/workflows/debian-package.yml) for
-current results; a listed target is not a claim that every run passes.
+and exercises the installed CLI. The isolated real APT/dpkg handoff suite runs
+separately on a native Ubuntu 24.04 GitHub-hosted VM because the distro matrix
+containers do not permit Bubblewrap's unprivileged user namespaces. See the
+[Debian package workflow](.github/workflows/debian-package.yml) for current
+results; a listed target is not a claim that every run passes.
 
 These are Linux amd64 container checks, not full desktop, derivative
 distribution, or other-architecture certification. Networked GitHub discovery
 and release inspection have separate live examples in the
 [discovery cases](docs/research/discovery-test-cases.md); CI does not depend
-on live GitHub search results or install third-party updates. The APT tests use
-local fixture packages inside bubblewrap and do not modify the host package
-database.
+on live GitHub search results or install third-party updates. The APT tests
+use local fixture packages inside bubblewrap and do not modify the runner's
+package database.
 
 ## Current Features
 
