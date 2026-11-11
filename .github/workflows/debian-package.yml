@@ -75,7 +75,46 @@ jobs:
       - name: Install isolated APT test prerequisites
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends bubblewrap
+          sudo apt-get install -y --no-install-recommends apparmor bubblewrap
+
+      - name: Configure and verify Bubblewrap isolation
+        run: |
+          verify_isolation() {
+            host_netns="$(readlink /proc/self/ns/net)"
+            bwrap --unshare-all --ro-bind / / --proc /proc --dev /dev \
+              --setenv BEACON_HOST_NETNS "$host_netns" \
+              /usr/bin/python3 -c '
+          import os, socket
+          assert os.readlink("/proc/self/ns/net") != os.environ["BEACON_HOST_NETNS"]
+          assert [name for _, name in socket.if_nameindex()] == ["lo"]
+          with socket.socket() as sock:
+              sock.bind(("127.0.0.1", 0))
+          '
+          }
+
+          if ! verify_isolation; then
+            # Do not replace an existing policy. This unconfined profile permits
+            # user namespaces for bwrap and its children on this disposable VM.
+            if sudo grep -R -l -F /usr/bin/bwrap /etc/apparmor.d/; then
+              echo "An existing Bubblewrap AppArmor policy requires review." >&2
+              exit 1
+            else
+              status=$?
+              if [ "$status" -ne 1 ]; then
+                echo "Could not inspect existing AppArmor policy." >&2
+                exit "$status"
+              fi
+            fi
+            sudo apparmor_parser -a <<'PROFILE'
+          abi <abi/4.0>,
+          include <tunables/global>
+
+          profile beacon-ci-bwrap /usr/bin/bwrap flags=(unconfined) {
+            userns,
+          }
+          PROFILE
+            verify_isolation
+          fi
 
       - name: Run isolated real APT handoff tests
         run: python3 -m unittest discover -s tests -p test_apt_hook_experiments.py -v

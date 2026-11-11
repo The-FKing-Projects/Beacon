@@ -219,7 +219,15 @@ workflow repeats deterministic tests, package builds, and smoke tests across
 that five-target matrix. It runs the isolated APT suite separately on a native
 Ubuntu 24.04 GitHub-hosted VM because the nested distro containers prohibit
 Bubblewrap user namespaces; the isolated test step remains a required CI
-release gate. Tests are opt-in for local runs:
+release gate. If Bubblewrap isolation is unavailable, the disposable CI VM
+attempts to add an AppArmor profile for `/usr/bin/bwrap`, refusing an existing
+on-disk Bubblewrap policy, then verifies a separate network namespace with only a
+functional loopback interface. The profile is unconfined and permits user
+namespaces for Bubblewrap and its children, weakening Ubuntu's user-namespace
+restriction on that VM; it does not change kernel-wide user-namespace settings
+or the developer's host.
+Its effectiveness on GitHub-hosted runners still requires CI verification.
+Tests are opt-in for local runs:
 
 ```sh
 BEACON_RUN_APT_HOOK_EXPERIMENTS=1 python3 -m unittest discover -s tests -p test_apt_hook_experiments.py -v
