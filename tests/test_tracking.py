@@ -582,6 +582,8 @@ class TrackingTest(unittest.TestCase):
     def test_asset_filename_matching(self):
         cases = [
             ("bat_0.26.1_amd64.deb", "bat", "amd64", "Likely candidate"),
+            ("bat_0.26.1_arm64.deb", "bat", "arm64", "Likely candidate"),
+            ("bat_0.26.1_arm64.deb", "bat", "amd64", "Not suggested"),
             ("fd_10.5.2_amd64.deb", "fd-find", "amd64", "Unverified"),
             ("clovereye_0.1.0_amd64.deb", "clover-eye", "amd64", "Likely candidate"),
             ("clover-eye-1.2.3-x86_64.deb", "clover-eye", "amd64", "Likely candidate"),

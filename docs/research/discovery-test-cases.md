@@ -155,6 +155,15 @@ candidates**, not installed standalone packages; they are not a full
 | `bat` | `0.25.0-5ubuntu1` | `https://github.com/sharkdp/bat` | [`bat_0.26.1_amd64.deb`](https://github.com/sharkdp/bat/releases/tag/v0.26.1) | `bat:amd64` version `0.26.1` |
 | `fd-find` | `10.3.0-2ubuntu1` | `https://github.com/sharkdp/fd` | [`fd_10.5.2_amd64.deb`](https://github.com/sharkdp/fd/releases/tag/v10.5.2) | `fd:amd64` version `10.5.2` |
 
+The same `bat` release also offers `bat_0.26.1_arm64.deb`. On 2026-11-13,
+temporary inspection found internal metadata `bat:arm64` version `0.26.1`
+and SHA-256
+`4a70c3f6236f2c621bd68357257e21b78c9497de4de1e803301ec0209f168653`.
+Filename evidence correctly marked it as a likely candidate for `arm64` and
+not suggested for `amd64`. This validates metadata inspection and filename
+architecture filtering for one public archive; it does not certify Beacon
+installation on arm64 or expand the supported platform matrix.
+
 Both APT candidates were listed at
 `http://us.archive.ubuntu.com/ubuntu resolute/universe`, so discovery reported
 Ubuntu Repository rather than Local .deb Candidate. Both homepages were
