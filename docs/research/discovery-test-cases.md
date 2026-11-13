@@ -193,6 +193,26 @@ update. The simulated installed APT policy is not a recorded host installation.
 These cases preserve the existing guards; they do not enable package-name
 aliases or expand version-tag support.
 
+## Interrupted preparation and changed release inputs
+
+The offline cases in `tests/test_updates.py` also qualify failure paths using
+temporary tracking state and synthetic archive bytes:
+
+| Injected condition | Required result |
+| --- | --- |
+| Download error or `KeyboardInterrupt` during archive or checksum download while re-preparing | Keep the prior prepared row and archive, remove the new partial files, and clean stale partial downloads |
+| Storage error at directory synchronization after promoting a replacement archive | Remove the uncommitted replacement and retain the prior row and archive |
+| Changed selected asset URL, removed checksum asset, or changed/missing checksum entry | Reject installation before transaction preview, user approval, or privileged handoff; preserve saved preparation |
+| Modified retained archive bytes | Reject the changed digest before preview, approval, or privileged handoff; do not silently repair or approve the file |
+
+These are deterministic fault-injection regressions, not live upstream
+mutations, third-party installations, or a power-loss qualification. They
+exercise the existing cleanup and revalidation behavior without weakening
+the production guards. In particular, they do not establish crash atomicity
+between filesystem writes and SQLite commits. A saved preparation rejected
+as changed still requires a fresh `--prepare` and review; retaining its record
+is not permission to install it.
+
 ## Post-v1 qualification backlog
 
 The next qualification work should expand the observed cases rather than

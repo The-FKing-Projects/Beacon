@@ -110,6 +110,50 @@ class UpdatesTest(unittest.TestCase):
         self.assertIsNone(updates._prepared_row("app", "amd64"))
         self.assertEqual(list(updates._updates_directory().glob(".partial-*")), [])
 
+    def test_interrupted_repreparation_preserves_last_good_artifact(self):
+        existing = self.prepare_fixture()
+        directory = updates._updates_directory()
+        for stage in ("archive", "checksum"):
+            for failure in (tracking.TrackingError, KeyboardInterrupt):
+                def interrupted_download(url, destination, _limit):
+                    is_checksum = url.endswith("SHA256SUMS")
+                    destination.write_bytes(b"interrupted download")
+                    if is_checksum == (stage == "checksum"):
+                        raise failure("download interrupted")
+                    destination.write_bytes(self.asset_bytes)
+                    return self.digest
+
+                with self.subTest(stage=stage, failure=failure.__name__):
+                    (directory / ".partial-previous-interruption").write_bytes(b"stale partial")
+                    with contextlib.ExitStack() as stack:
+                        for item in self.common_prepare_patches():
+                            stack.enter_context(item)
+                        stack.enter_context(patch(
+                            "inspection.download", side_effect=interrupted_download,
+                        ))
+                        with contextlib.redirect_stdout(io.StringIO()), \
+                             self.assertRaisesRegex(failure, "download interrupted"):
+                            updates.prepare("app", self.filename)
+                    self.assertEqual(updates._prepared_row("app", "amd64"), existing)
+                    self.assertEqual(Path(existing[15]).read_bytes(), self.asset_bytes)
+                    self.assertEqual(list(directory.glob(".partial-*")), [])
+                    self.assertEqual(list(directory.glob("*.deb")), [Path(existing[15])])
+
+    def test_repreparation_storage_failure_preserves_previous_artifact(self):
+        existing = self.prepare_fixture()
+        with contextlib.ExitStack() as stack:
+            for item in self.common_prepare_patches():
+                stack.enter_context(item)
+            stack.enter_context(patch("updates.os.fsync", side_effect=OSError("storage failure")))
+            with contextlib.redirect_stdout(io.StringIO()), \
+                 self.assertRaisesRegex(OSError, "storage failure"):
+                updates.prepare("app", self.filename)
+        self.assertEqual(updates._prepared_row("app", "amd64"), existing)
+        self.assertEqual(Path(existing[15]).read_bytes(), self.asset_bytes)
+        directory = updates._updates_directory()
+        self.assertEqual(list(directory.glob(".partial-*")), [])
+        self.assertEqual(list(directory.glob("*.deb")), [Path(existing[15])])
+
     def test_prepare_blocks_downgrade_and_existing_apt_ownership(self):
         patches = self.common_prepare_patches(relation="older")
         with contextlib.ExitStack() as stack:
@@ -262,6 +306,53 @@ class UpdatesTest(unittest.TestCase):
             with contextlib.redirect_stdout(io.StringIO()):
                 updates.install("app")
             mocks[-1].assert_not_called()
+
+    def test_changed_release_evidence_blocks_install_before_approval(self):
+        existing = self.prepare_fixture()
+        cases = [
+            ("inspection.selected_release_assets",
+             ("v2.0", self.asset_url + ".changed", self.checksum_url),
+             "asset identity changed"),
+            ("inspection.selected_release_assets",
+             ("v2.0", self.asset_url, None),
+             "asset identity changed"),
+            ("updates._download_checksum", "0" * 64, "checksum changed"),
+            ("updates._download_checksum", None, "checksum changed"),
+        ]
+        for target, value, message in cases:
+            with self.subTest(target=target, value=value), contextlib.ExitStack() as stack:
+                for item in self._install_patches():
+                    stack.enter_context(item)
+                stack.enter_context(patch(target, return_value=value))
+                preview = stack.enter_context(patch("apt_handoff.simulate_install"))
+                approve = stack.enter_context(patch("builtins.input"))
+                privileged = stack.enter_context(patch("updates._sudo_install"))
+                with self.assertRaisesRegex(tracking.TrackingError, message):
+                    updates.install("app")
+                preview.assert_not_called()
+                approve.assert_not_called()
+                privileged.assert_not_called()
+                self.assertEqual(updates._prepared_row("app", "amd64"), existing)
+                self.assertEqual(Path(existing[15]).read_bytes(), self.asset_bytes)
+
+    def test_tampered_prepared_artifact_blocks_install_before_approval(self):
+        existing = self.prepare_fixture()
+        Path(existing[15]).write_bytes(b"changed after preparation")
+        real_hash_file = apt_handoff._hash_file
+        with contextlib.ExitStack() as stack:
+            for item in self._install_patches():
+                stack.enter_context(item)
+            stack.enter_context(patch("apt_handoff._hash_file", wraps=real_hash_file))
+            preview = stack.enter_context(patch("apt_handoff.simulate_install"))
+            approve = stack.enter_context(patch("builtins.input"))
+            privileged = stack.enter_context(patch("updates._sudo_install"))
+            with self.assertRaisesRegex(tracking.TrackingError, "digest changed"):
+                updates.install("app")
+            preview.assert_not_called()
+            approve.assert_not_called()
+            privileged.assert_not_called()
+        self.assertEqual(updates._prepared_row("app", "amd64"), existing)
+        self.assertEqual(Path(existing[15]).read_bytes(), b"changed after preparation")
 
     def test_install_blocks_removals_before_confirmation(self):
         self.prepare_fixture()
