@@ -265,15 +265,19 @@ Not every package will have an identifiable upstream or suitable release.
 
 ## Non-Goals
 
-- Replacing APT
-- Replacing Flatpak
+- Replacing APT, Flatpak, Snap, or another package manager
+- Duplicating package updates already handled by their package manager or Topgrade
 - Replacing Topgrade
 - Creating another Linux package manager
 - Silently installing packages or treating a confidence score as proof of trust
 
-APT remains responsible for package installation and dependency handling.
-RPM- and Arch-based discovery, along with other installation formats, are
-future considerations rather than current support.
+Beacon fills the gap for standalone local `.deb` packages that lack a
+configured package source or their own updater. APT, PPAs, Flatpak, and Snap
+remain useful and supported parts of the desktop ecosystem; their existing
+package managers and Topgrade should handle the update workflows they already
+provide. Beacon hands installation and dependency resolution to APT for its
+own explicitly reviewed `.deb` updates. RPM- and Arch-based discovery and
+other installation formats are not current Beacon support.
 
 ## Releases
 
@@ -346,7 +350,9 @@ are planned acceptance criteria, not claims of implemented support:
    existing source confirmation, exact asset selection, fresh transaction
    approval, removal/downgrade blocking, and post-install verification gates.
 
-Topgrade integration is a later design task: define how it reports updates
-and handles interactive approval without bypassing these gates before adding
-an integration. Direct Nala support and a GUI remain deferred. This roadmap
-does not add unattended installation or broaden the declared platform support.
+Any future Topgrade integration should focus only on the standalone `.deb`
+gap, avoid duplicating its existing package-manager support, and preserve
+Beacon's explicit review and approval gates. It is not needed to reimplement
+Flatpak, Snap, or repository updates. Direct Nala support and a GUI remain
+deferred. This roadmap does not add unattended installation or broaden the
+declared platform support.

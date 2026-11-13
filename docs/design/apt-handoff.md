@@ -79,8 +79,12 @@ against a malicious administrator or promise universal rollback.
 
 The Debian package contains the privileged helper but does not add a
 persistent APT hook, install any upstream asset automatically, or change
-configured APT repositories. Direct Nala support, Topgrade integration, and
-GUI work remain out of scope.
+configured APT repositories. Beacon focuses on standalone local `.deb`
+updates; configured APT/PPAs, Flatpak, and Snap updates remain with their
+package managers and Topgrade rather than being duplicated here. Any future
+Topgrade integration should expose only Beacon's standalone `.deb` gap and
+preserve its explicit approval flow. Direct Nala support and GUI work remain
+out of scope.
 
 ## Accepted limitations
 
