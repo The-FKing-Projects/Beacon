@@ -90,12 +90,14 @@ def suggest(package):
     name, architecture, _ = tracking.installed_package(package)
     homepage = package_homepage(name, architecture)
     direct = homepage_repository(homepage)
+    homepage_candidate_id = None
     candidates = {}
     if direct:
         candidate = parse_candidate(tracking.github_get("/repos/" + quote(direct, safe="/")))
         candidate["evidence"] = [f"installed package homepage: {homepage}"]
         candidate["rank"] = 3
         candidates[candidate["id"]] = candidate
+        homepage_candidate_id = candidate["id"]
 
     query = quote(f"{name} in:name", safe="")
     data = tracking.github_get(f"/search/repositories?q={query}&per_page=30")
@@ -127,6 +129,14 @@ def suggest(package):
     if not candidates:
         print("No candidates found; this does not prove that no upstream exists.")
         return
+    if homepage_candidate_id is not None and any(
+        candidate["id"] != homepage_candidate_id and candidate["rank"] >= 2
+        for candidate in candidates.values()
+    ):
+        print(
+            "Warning: an exact package-name match points to a different repository "
+            "than the installed package homepage; review both candidates."
+        )
     ordered = sorted(candidates.values(), key=lambda c: (-c["rank"], c["name"].lower()))
     strongest_rank = ordered[0]["rank"]
     strongest_matches = [candidate for candidate in ordered

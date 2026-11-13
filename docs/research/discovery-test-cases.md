@@ -186,12 +186,13 @@ Offline regression coverage uses these observed versions, names, homepage
 and repository identities. It also explicitly **simulates installed
 packages** and adds a synthetic competing name-search result to exercise
 the installed-only CLI paths without changing the host. The fixtures verify
-direct-homepage ranking without saving an association, conservative release
-comparisons, APT ownership blocking before release selection/download, and
-`fd`/`fd-find` rejection with cleanup and preservation of an unrelated prepared
-update. The simulated installed APT policy is not a recorded host installation.
-These cases preserve the existing guards; they do not enable package-name
-aliases or expand version-tag support.
+direct-homepage ranking, a warning when a distinct exact-name candidate
+conflicts with the package homepage, and no association being saved;
+conservative release comparisons; APT ownership blocking before release
+selection/download; and `fd`/`fd-find` rejection with cleanup and preservation
+of an unrelated prepared update. The simulated installed APT policy is not a
+recorded host installation. These cases preserve the existing guards; they do
+not enable package-name aliases or expand version-tag support.
 
 ## Interrupted preparation and changed release inputs
 

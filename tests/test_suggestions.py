@@ -99,6 +99,10 @@ class SuggestionsTest(unittest.TestCase):
         self.assertEqual(result.count("  https://github.com/sharkdp/fd\n"), 1)
         self.assertIn("Match: Very high:", result)
         self.assertIn("Match: High:", result)
+        self.assertIn(
+            "exact package-name match points to a different repository",
+            result,
+        )
         self.assertIn("Nothing was saved.", result)
 
     def test_cli_homepage_timeout_prevents_search_or_database_writes(self):
