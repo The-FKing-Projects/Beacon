@@ -249,13 +249,14 @@ def assert_not_managed_by_apt(package, architecture):
         raise tracking.TrackingError(
             "APT ownership is uncertain; refusing to prepare or install this package."
         )
+    repository_origins = inspection.policy_origins_for_version(result.stdout, None)
+    if any("://" in origin for origin in repository_origins):
+        raise tracking.TrackingError(
+            f"APT has repository versions for {package}:{architecture}; "
+            "use the configured APT source rather than Beacon."
+        )
     if candidate != "(none)":
         origins = inspection.policy_origins_for_version(result.stdout, candidate)
-        if any("://" in origin for origin in origins):
-            raise tracking.TrackingError(
-                f"APT has a repository candidate for {package}:{architecture}; "
-                "use the configured APT source rather than Beacon."
-            )
         if not origins:
             raise tracking.TrackingError(
                 "APT candidate origin is uncertain; refusing to override it with Beacon."
@@ -263,7 +264,7 @@ def assert_not_managed_by_apt(package, architecture):
     return {
         "installed": installed,
         "candidate": candidate,
-        "evidence": "no configured APT repository candidate was found",
+        "evidence": "no configured APT repository versions were found",
     }
 
 

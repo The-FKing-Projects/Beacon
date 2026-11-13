@@ -59,7 +59,7 @@ class UpdatesTest(unittest.TestCase):
             patch("tracking.resolve_repository", return_value=("owner/repo", 123)),
             patch("apt_handoff.assert_not_managed_by_apt", return_value={
                 "installed": "1.0", "candidate": "(none)",
-                "evidence": "no configured APT repository candidate was found",
+                "evidence": "no configured APT repository versions were found",
             }),
             patch("inspection.selected_assets", return_value=(
                 "v2.0", self.asset_url, self.checksum_url,
@@ -165,8 +165,8 @@ class UpdatesTest(unittest.TestCase):
         with patch("tracking.installed_package", return_value=("app", "amd64", "1.0")), \
              patch("tracking.resolve_repository", return_value=("owner/repo", 123)), \
              patch("apt_handoff.assert_not_managed_by_apt",
-                   side_effect=tracking.TrackingError("APT has a repository candidate")):
-            with self.assertRaisesRegex(tracking.TrackingError, "repository candidate"):
+                   side_effect=tracking.TrackingError("APT has repository versions")):
+            with self.assertRaisesRegex(tracking.TrackingError, "repository versions"):
                 updates.prepare("app", self.filename)
 
     def test_prepare_rejects_architecture_all_for_an_architecture_specific_install(self):
@@ -221,32 +221,34 @@ class UpdatesTest(unittest.TestCase):
                 ("fd-find",),
             ).fetchone(), ("sharkdp/fd", 90793418))
 
-    def test_apt_managed_bat_is_blocked_before_release_selection_or_download(self):
+    def test_local_candidate_with_older_apt_repository_version_is_blocked_before_download(self):
         with contextlib.closing(tracking.open_database()) as db, db:
             db.execute(
                 "INSERT INTO tracked_packages VALUES (?, ?, ?, ?)",
-                ("bat", "amd64", 130464961, "sharkdp/bat"),
+                ("fixture-app", "amd64", 123456, "example/upstream"),
             )
         policy = (
-            "bat:\n"
-            "  Installed: 0.25.0-5ubuntu1\n"
-            "  Candidate: 0.25.0-5ubuntu1\n"
+            "fixture-app:\n"
+            "  Installed: 2.0\n"
+            "  Candidate: 2.0\n"
             "  Version table:\n"
-            " *** 0.25.0-5ubuntu1 500\n"
-            "        500 http://us.archive.ubuntu.com/ubuntu resolute/universe amd64 Packages\n"
+            " *** 2.0 100\n"
             "        100 /var/lib/dpkg/status\n"
+            "     1.0 500\n"
+            "        500 https://packages.example.test/debian stable/main amd64 Packages\n"
         )
-        with patch("tracking.installed_package", return_value=("bat", "amd64", "0.25.0-5ubuntu1")), \
-             patch("tracking.resolve_repository", return_value=("sharkdp/bat", 130464961)), \
+        with patch("tracking.installed_package",
+                   return_value=("fixture-app", "amd64", "2.0")), \
+             patch("tracking.resolve_repository", return_value=("example/upstream", 123456)), \
              patch("apt_handoff._run",
                    return_value=SimpleNamespace(stdout=policy, stderr="", returncode=0)), \
              patch("inspection.selected_assets") as select, \
              patch("inspection.download") as download:
-            with self.assertRaisesRegex(tracking.TrackingError, "use the configured APT source"):
-                updates.prepare("bat", "bat_0.26.1_amd64.deb")
+            with self.assertRaisesRegex(tracking.TrackingError, "APT has repository versions"):
+                updates.prepare("fixture-app", "fixture-app_3.0_amd64.deb")
             select.assert_not_called()
             download.assert_not_called()
-        self.assertIsNone(updates._prepared_row("bat", "amd64"))
+        self.assertIsNone(updates._prepared_row("fixture-app", "amd64"))
         self.assertEqual(list(updates._updates_directory().glob("*.deb")), [])
 
     def _install_patches(self, plan=None, answer="yes", final_version="2.0"):

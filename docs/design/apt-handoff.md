@@ -55,7 +55,11 @@ against a malicious administrator or promise universal rollback.
    installed version are retained in private user storage.
 2. `--install` revalidates the confirmed repository ID/name, selected release
    and asset URL, checksum evidence, artifact digest and package metadata,
-   APT ownership, and installed package state. It previews the complete APT
+   APT ownership, and installed package state. A package is considered
+   APT-managed if any version in its policy table comes from a configured
+   repository, even when a newer locally installed version is APT's current
+   candidate. Beacon does not take over a package just because its repository
+   version is older. It previews the complete APT
    transaction and requires fresh confirmation after showing all package
    changes. Removals, downgrades, ambiguous identities, and changed state are
    blockers.

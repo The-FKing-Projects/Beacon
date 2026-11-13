@@ -37,7 +37,7 @@ def policy_origins_for_version(output, selected_version):
         if len(parts) >= 2 and parts[1].isdigit():
             current_version = parts[0]
             continue
-        if current_version == selected_version and (
+        if (selected_version is None or current_version == selected_version) and (
             "://" in stripped or "/var/lib/dpkg/status" in stripped
         ):
             origins.append(stripped)

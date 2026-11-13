@@ -223,6 +223,12 @@ between filesystem writes and SQLite commits. A saved preparation rejected
 as changed still requires a fresh `--prepare` and review; retaining its record
 is not permission to install it.
 
+APT ownership regression tests also cover the case where the installed version
+appears as the candidate from dpkg status while an older version remains
+available from a configured repository. Any repository version now blocks
+Beacon preparation before release selection or download; a locally installed
+newer version no longer hides APT's ability to manage the package.
+
 ## Post-v1 qualification backlog
 
 The next qualification work should expand the observed cases rather than

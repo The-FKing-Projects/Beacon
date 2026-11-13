@@ -1,6 +1,7 @@
 import os
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -49,6 +50,42 @@ class AptHandoffTest(unittest.TestCase):
             f"{self.archive}\n"
             "example-app - - none < 2.0 amd64 none **CONFIGURE**\n"
         )
+
+    def test_any_apt_repository_version_blocks_a_newer_local_candidate(self):
+        policy = """\
+fixture-app:
+  Installed: 2.0
+  Candidate: 2.0
+  Version table:
+ *** 2.0 100
+        100 /var/lib/dpkg/status
+     1.0 500
+        500 https://packages.example.test/debian stable/main amd64 Packages
+"""
+        with patch.object(
+            apt_handoff,
+            "_run",
+            return_value=SimpleNamespace(stdout=policy, stderr="", returncode=0),
+        ):
+            with self.assertRaisesRegex(tracking.TrackingError, "APT has repository versions"):
+                apt_handoff.assert_not_managed_by_apt("fixture-app", "amd64")
+
+    def test_local_only_candidate_remains_eligible_for_beacon(self):
+        policy = """\
+topgrade:
+  Installed: 17.6.1
+  Candidate: 17.6.1
+  Version table:
+ *** 17.6.1 100
+        100 /var/lib/dpkg/status
+"""
+        with patch.object(
+            apt_handoff,
+            "_run",
+            return_value=SimpleNamespace(stdout=policy, stderr="", returncode=0),
+        ):
+            result = apt_handoff.assert_not_managed_by_apt("topgrade", "amd64")
+        self.assertEqual(result["evidence"], "no configured APT repository versions were found")
 
     def test_preview_parser_captures_installs_upgrades_and_removals(self):
         output = (
