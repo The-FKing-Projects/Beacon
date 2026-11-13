@@ -8,6 +8,10 @@ installed package might have come from, helps users identify its upstream
 project, and lets users review a selected release asset before handing the
 update to APT.
 
+The v1 updater currently tracks confirmed GitHub repositories and GitHub
+release assets. Direct vendor download URLs and other release providers are
+not yet supported.
+
 The initial focus is Debian and Ubuntu. Beacon
 [v1.0.0](https://github.com/The-FKing-Projects/Beacon/releases/tag/v1.0.0)
 is the first stable CLI updater release, available as a GitHub Release Debian
@@ -357,6 +361,11 @@ are planned acceptance criteria, not claims of implemented support:
    installation with local fixtures in the isolated APT suite. Retain the
    existing source confirmation, exact asset selection, fresh transaction
    approval, removal/downgrade blocking, and post-install verification gates.
+5. **Other standalone `.deb` sources.** Evaluate packages whose built-in
+   checker only points users to a vendor download, but whose update is not
+   available from APT or a PPA. The current updater is GitHub-only; any
+   additional provider needs an explicit design for version discovery, source
+   identity, redirects, and artifact verification before implementation.
 
 Any future Topgrade integration should focus only on the standalone `.deb`
 gap, avoid duplicating its existing package-manager support, and preserve
