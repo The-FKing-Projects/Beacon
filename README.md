@@ -23,7 +23,62 @@ Installing Beacon adds its CLI, Python modules, and privileged APT handoff
 helper. It does not update other software, add APT sources, or activate
 persistent APT hooks.
 
-### Download the stable .deb
+### Signed APT repository (recommended)
+
+Use the repository to receive Beacon updates through your normal APT upgrades.
+The following setup is for an amd64 Debian or Ubuntu system. The repository
+currently publishes `all` and `amd64` packages; other architectures have not
+been qualified.
+
+If you already configured this repository, keep your existing source entry
+and skip to the install/upgrade commands below instead of adding a duplicate.
+
+First, install the prerequisites and download the public signing key:
+
+```bash
+sudo apt update
+sudo apt install ca-certificates curl gnupg
+curl --fail --show-error --location --output fkingprojects.asc \
+  https://repo.fkingprojects.org/repo.asc
+gpg --show-keys --with-fingerprint ./fkingprojects.asc
+```
+
+Confirm that the **primary key fingerprint** matches:
+
+```text
+CC3A F6FC 9E04 3D34 9F4E  EE9A FCDE 9316 8DE0 563A
+```
+
+Stop if the download fails or the fingerprint differs. Otherwise, install the
+key and add the repository. `Signed-By` restricts this source to that key;
+it does not add the key to APT's global trusted keyring.
+
+```bash
+sudo install -d -m 0755 /etc/apt/keyrings
+sudo install -m 0644 ./fkingprojects.asc /etc/apt/keyrings/fkingprojects.asc
+sudo tee /etc/apt/sources.list.d/fkingprojects.sources >/dev/null <<'EOF'
+Types: deb
+URIs: https://repo.fkingprojects.org
+Suites: stable
+Components: main
+Architectures: amd64
+Signed-By: /etc/apt/keyrings/fkingprojects.asc
+EOF
+```
+
+Then install or upgrade Beacon:
+
+```bash
+sudo apt update
+sudo apt install beacon
+beacon --version
+```
+
+Review APT's proposed transaction before confirming. Repository setup is an
+explicit system configuration change; installing Beacon alone does not add
+this source.
+
+### Download the stable .deb (alternative)
 
 Download the `.deb` from the
 [latest stable release](https://github.com/The-FKing-Projects/Beacon/releases/latest).
@@ -38,21 +93,6 @@ beacon --version
 For a newer release, substitute the actual downloaded filename. APT resolves
 the package's dependencies; review its proposed transaction before confirming.
 Installing a downloaded `.deb` does not configure automatic updates for Beacon.
-
-### Use an already configured APT source
-
-If you have already configured the project's
-[signed APT repository](https://repo.fkingprojects.org), install or upgrade
-Beacon through that source:
-
-```bash
-sudo apt update
-sudo apt install beacon
-beacon --version
-```
-
-These commands do not configure the repository or its signing key. If the
-source is not configured, use the release `.deb` above.
 
 ## Compatibility and validation
 
