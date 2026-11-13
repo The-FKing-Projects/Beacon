@@ -16,6 +16,44 @@ are implemented.
 The updater path has passed isolated real-transaction tests and package
 qualification across the declared support matrix.
 
+## Install Beacon
+
+Use the stable Debian package; building from source is not required.
+Installing Beacon adds its CLI, Python modules, and privileged APT handoff
+helper. It does not update other software, add APT sources, or activate
+persistent APT hooks.
+
+### Download the stable .deb
+
+Download the `.deb` from the
+[latest stable release](https://github.com/The-FKing-Projects/Beacon/releases/latest).
+For v1.0.0, the file is `beacon_1.0.0-1_all.deb`. Open a terminal in the
+directory containing the downloaded file and run:
+
+```bash
+sudo apt install ./beacon_1.0.0-1_all.deb
+beacon --version
+```
+
+For a newer release, substitute the actual downloaded filename. APT resolves
+the package's dependencies; review its proposed transaction before confirming.
+Installing a downloaded `.deb` does not configure automatic updates for Beacon.
+
+### Use an already configured APT source
+
+If you have already configured the project's
+[signed APT repository](https://repo.fkingprojects.org), install or upgrade
+Beacon through that source:
+
+```bash
+sudo apt update
+sudo apt install beacon
+beacon --version
+```
+
+These commands do not configure the repository or its signing key. If the
+source is not configured, use the release `.deb` above.
+
 ## Compatibility and validation
 
 Beacon targets Debian/Ubuntu systems with Python 3.10 or newer, APT, and dpkg.
@@ -162,38 +200,6 @@ failed store. Without a usable backup, keep the original and move it aside
 explicitly before starting a fresh store; associations must then be reviewed
 and confirmed again. Do not edit the schema version merely to bypass an error.
 
-## Build the Debian package
-
-The package installs Beacon's CLI and Python modules; it does not install or
-update other software, add APT sources, or activate APT hooks. Build it on a
-Debian- or Ubuntu-based system with the Debian packaging tools:
-
-```bash
-sudo apt install debhelper dpkg-dev
-dpkg-buildpackage -us -uc -b
-```
-
-The `.deb` is written to the parent directory. Inspect its metadata and file
-list before installing it:
-
-```bash
-PACKAGE="../beacon_$(dpkg-parsechangelog -SVersion)_all.deb"
-dpkg-deb --info "$PACKAGE"
-dpkg-deb --contents "$PACKAGE"
-```
-
-The package version in `debian/changelog` is synchronized with Beacon's
-automated release version. A Debian package build does not verify upstream
-release assets or make installing those assets safe.
-
-The release workflow builds, checks, and uploads a matching `.deb` for every
-automated release. To add or refresh the package for an existing release, run
-the **Publish Debian package** workflow with that release's tag.
-
-Releases can also be published to the project's self-hosted, GPG-signed aptly
-repository. See [APT publishing setup](docs/research/release-automation.md#self-hosted-apt-publishing)
-for runner requirements, enablement, and retry instructions.
-
 ## Stable updater workflow
 
 The v1 CLI implements the following end-to-end workflow:
@@ -236,6 +242,43 @@ release by default. See [automated release details](docs/research/release-automa
 for the required repository settings. Direct pushes do not automatically
 release; the **Release** workflow also supports a manual run on `main` with
 an explicit version bump and release title.
+
+The release workflow builds, checks, and uploads a matching `.deb` for every
+automated release. To add or refresh the package for an existing release, run
+the **Publish Debian package** workflow with that release's tag.
+
+Releases can also be published to the project's self-hosted, GPG-signed aptly
+repository. See [APT publishing setup](docs/research/release-automation.md#self-hosted-apt-publishing)
+for runner requirements, enablement, and retry instructions. This is maintainer
+documentation, not client-side APT source setup.
+
+## For contributors
+
+<details>
+<summary>Build the Debian package from source</summary>
+
+From the root of a Beacon checkout on a Debian- or Ubuntu-based system,
+install the build tools and build the package:
+
+```bash
+sudo apt install debhelper dpkg-dev
+dpkg-buildpackage -us -uc -b
+```
+
+The `.deb` is written to the checkout's parent directory. Inspect its metadata
+and file list before installing it:
+
+```bash
+PACKAGE="../beacon_$(dpkg-parsechangelog -SVersion)_all.deb"
+dpkg-deb --info "$PACKAGE"
+dpkg-deb --contents "$PACKAGE"
+```
+
+The package version in `debian/changelog` is synchronized with Beacon's
+automated release version. A Debian package build does not verify upstream
+release assets or make installing those assets safe.
+
+</details>
 
 ## Post-v1 roadmap
 
