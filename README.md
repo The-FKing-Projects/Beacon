@@ -272,8 +272,10 @@ Not every package will have an identifiable upstream or suitable release.
 ## Non-Goals
 
 - Replacing APT, Flatpak, Snap, or another package manager
-- Duplicating package updates already handled by their package manager or Topgrade
-- Replacing Topgrade
+- Duplicating package updates already handled by their package manager or
+  [Topgrade](https://github.com/topgrade-rs/topgrade)
+- Managing AppImage updates already handled by
+  [Gear Lever](https://github.com/mijorus/gearlever)
 - Creating another Linux package manager
 - Silently installing packages or treating a confidence score as proof of trust
 
@@ -281,15 +283,19 @@ Beacon covers standalone local `.deb` packages that are not available from a
 configured APT repository or PPA, whether or not an application includes its
 own update checker. A checker that only directs the user to a download does
 not itself update the installed package; Beacon can help turn that release
-asset into a reviewed APT transaction. APT, PPAs, Flatpak, and Snap remain
-useful and supported parts of the desktop ecosystem; their existing package
-managers and Topgrade should handle the update workflows they already
-provide. Beacon hands installation and dependency resolution to APT for its
-explicitly reviewed `.deb` updates. Arch support is not currently on the
-roadmap because pacman and the AUR already cover that ecosystem's package
-workflows. RPM support is a possible future evaluation, not a commitment:
-supporting the Red Hat and SUSE branches would require separate compatibility
-and maintenance decisions. Neither is currently supported.
+asset into a reviewed APT transaction. This does not extend to AppImages:
+[Gear Lever](https://github.com/mijorus/gearlever) manages AppImage updates
+using embedded update information or a source configured by the user, such as
+GitHub. APT, PPAs, Flatpak, and Snap remain useful and supported parts of the
+desktop ecosystem; their existing package managers and
+[Topgrade](https://github.com/topgrade-rs/topgrade) should handle the update
+workflows they already provide. Beacon hands installation and dependency
+resolution to APT for its explicitly reviewed `.deb` updates. Arch support
+is not currently on the roadmap because pacman and the AUR already cover that
+ecosystem's package workflows. RPM support is a possible future evaluation,
+not a commitment: supporting the Red Hat and SUSE branches would require
+separate compatibility and maintenance decisions. Neither is currently
+supported.
 
 ## Releases
 
