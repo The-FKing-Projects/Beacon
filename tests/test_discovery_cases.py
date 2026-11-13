@@ -10,6 +10,24 @@ from beacon import package_provenance, package_state
 
 
 class RealPackageDiscoveryCasesTest(unittest.TestCase):
+    def test_bat_and_fd_find_candidates_are_distro_packages_not_local_installs(self):
+        for package, version in (("bat", "0.25.0-5ubuntu1"), ("fd-find", "10.3.0-2ubuntu1")):
+            policy = (
+                f"{package}:\n"
+                "  Installed: (none)\n"
+                f"  Candidate: {version}\n"
+                "  Version table:\n"
+                f"     {version} 500\n"
+                "        500 http://us.archive.ubuntu.com/ubuntu resolute/universe amd64 Packages\n"
+            )
+            with self.subTest(package=package), patch(
+                "beacon.subprocess.run",
+                return_value=SimpleNamespace(stdout=policy, stderr="", returncode=0),
+            ):
+                provenance = package_provenance(package)
+            self.assertEqual(provenance["source"], "Ubuntu Repository")
+            self.assertIn("selected candidate version", provenance["evidence"][0])
+
     def test_bash_is_attributed_to_ubuntu_repository(self):
         policy = """\
 bash:

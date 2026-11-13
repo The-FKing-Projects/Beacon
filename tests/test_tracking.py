@@ -87,6 +87,8 @@ class TrackingTest(unittest.TestCase):
             ("1.2.3", "v1.2.4-beta"): "Unknown: versions cannot be compared safely.",
             ("1.2", "v1.2.3"): "Unknown: versions cannot be compared safely.",
             ("1.2.3-1ubuntu1", "v1.2.4"): "Unknown: versions cannot be compared safely.",
+            ("0.25.0-5ubuntu1", "v0.26.1"): "Unknown: versions cannot be compared safely.",
+            ("10.3.0-2ubuntu1", "v10.5.2"): "Unknown: versions cannot be compared safely.",
             ("1.2.3-1+b1", "v1.2.4"): "Unknown: versions cannot be compared safely.",
             ("1.2.3-1~deb12u1", "v1.2.4"): "Unknown: versions cannot be compared safely.",
             ("1:1.2.3-1", "v1.2.4"): "Unknown: versions cannot be compared safely.",
@@ -579,6 +581,8 @@ class TrackingTest(unittest.TestCase):
 
     def test_asset_filename_matching(self):
         cases = [
+            ("bat_0.26.1_amd64.deb", "bat", "amd64", "Likely candidate"),
+            ("fd_10.5.2_amd64.deb", "fd-find", "amd64", "Unverified"),
             ("clovereye_0.1.0_amd64.deb", "clover-eye", "amd64", "Likely candidate"),
             ("clover-eye-1.2.3-x86_64.deb", "clover-eye", "amd64", "Likely candidate"),
             ("app_1.2.3_aarch64.deb", "app", "arm64", "Likely candidate"),

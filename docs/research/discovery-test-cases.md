@@ -1,8 +1,9 @@
 # Software Discovery Test Cases
 
-These fixtures reflect APT and dpkg metadata inspected on 2026-11-07 and a
-user-provided Kubuntu 26.04.1 snapshot from 2026-11-08, along with explicit
-synthetic cases for source and package-state edge conditions. They exercise
+These fixtures reflect APT and dpkg metadata inspected on 2026-11-07, a
+user-provided Kubuntu 26.04.1 snapshot from 2026-11-08, and the available
+package metadata and public release inspections from 2026-11-13 below, along
+with explicit synthetic cases for source and package-state edge conditions. They exercise
 package parsing without requiring network access or packages to be installed
 in the test environment.
 
@@ -140,6 +141,57 @@ an already-current upstream version, ambiguous generic-name search, a
 separator-only name suggestion, and releases with and without a supported
 checksum manifest. They do not establish support for all projects, release
 formats, or Debian/Ubuntu versions.
+
+## Available distro packages: bat and fd-find
+
+On 2026-11-13 (UTC), read-only APT metadata queries and temporary public
+archive inspection expanded the evidence to two additional projects. Neither
+package was installed. These observations compare **available Ubuntu
+candidates**, not installed standalone packages; they are not a full
+`--track`/`--prepare`/`--install` qualification.
+
+| APT package | Observed Ubuntu candidate | Package homepage | Selected upstream archive | Internal archive metadata |
+| --- | --- | --- | --- | --- |
+| `bat` | `0.25.0-5ubuntu1` | `https://github.com/sharkdp/bat` | [`bat_0.26.1_amd64.deb`](https://github.com/sharkdp/bat/releases/tag/v0.26.1) | `bat:amd64` version `0.26.1` |
+| `fd-find` | `10.3.0-2ubuntu1` | `https://github.com/sharkdp/fd` | [`fd_10.5.2_amd64.deb`](https://github.com/sharkdp/fd/releases/tag/v10.5.2) | `fd:amd64` version `10.5.2` |
+
+Both APT candidates were listed at
+`http://us.archive.ubuntu.com/ubuntu resolute/universe`, so discovery reported
+Ubuntu Repository rather than Local .deb Candidate. Both homepages were
+exact HTTPS GitHub repository URLs; `homepage_repository` recognized them.
+This tests public homepage metadata, not `package_homepage` against an
+installed package. No real GitHub name-search ranking was measured.
+
+The selected assets were fetched using `selected_release_assets` and
+`download`, inspected with `inspect_fields`, and removed with their temporary
+directory. No payload or maintainer script was executed. Neither release
+provided the supported `SHA256SUMS` asset. Observed SHA-256 values were:
+
+- `bat_0.26.1_amd64.deb`: `ad59954aa1540e526f97267f60557ea5ef4c7dcf91a0811254134537cb353a3c`
+- `fd_10.5.2_amd64.deb`: `342a9d1618c4340668cb7ad96d353064bf226ac403add80e587103975d5fa49c`
+
+These digests record the downloads; they are not independent authenticity
+evidence. The full Debian comparison found each selected archive's version
+newer than its corresponding distro candidate. The release-tag comparison
+correctly remained unknown for the `ubuntu1` revisions.
+
+The `fd-find` case demonstrates why upstream identity and package identity
+must remain separate: its homepage identifies `sharkdp/fd`, but the upstream
+archive is a package named `fd`, not `fd-find`. A newer version and a valid
+upstream association must not turn it into an update for `fd-find`.
+Filename matching left this asset unverified, while the `bat` filename was
+only a likely candidate, not an approved update.
+
+Offline regression coverage uses these observed versions, names, homepage
+and repository identities. It also explicitly **simulates installed
+packages** and adds a synthetic competing name-search result to exercise
+the installed-only CLI paths without changing the host. The fixtures verify
+direct-homepage ranking without saving an association, conservative release
+comparisons, APT ownership blocking before release selection/download, and
+`fd`/`fd-find` rejection with cleanup and preservation of an unrelated prepared
+update. The simulated installed APT policy is not a recorded host installation.
+These cases preserve the existing guards; they do not enable package-name
+aliases or expand version-tag support.
 
 ## Post-v1 qualification backlog
 

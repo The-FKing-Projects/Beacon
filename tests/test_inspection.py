@@ -131,6 +131,14 @@ class InspectionTest(unittest.TestCase):
         with self.assertRaisesRegex(tracking.TrackingError, "Invalid Debian version"):
             inspection.version_relation("1.0", "not-a-version")
 
+    def test_observed_upstream_assets_compare_against_distro_candidate_versions(self):
+        for distro_version, asset_version in (
+            ("0.25.0-5ubuntu1", "0.26.1"),
+            ("10.3.0-2ubuntu1", "10.5.2"),
+        ):
+            with self.subTest(distro_version=distro_version):
+                self.assertEqual(inspection.version_relation(distro_version, asset_version), "newer")
+
     def run_inspection(self, metadata=("app", "amd64", "1.2.0"), bad_checksum=False):
         paths = []
         filename = "app_1.2.0_amd64.deb"

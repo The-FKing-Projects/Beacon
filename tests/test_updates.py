@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -136,6 +137,73 @@ class UpdatesTest(unittest.TestCase):
                 updates.prepare("app", self.filename)
         self.assertIsNone(updates._prepared_row("app", "amd64"))
         self.assertEqual(list(updates._updates_directory().glob(".partial-*")), [])
+
+    def test_upstream_fd_asset_cannot_replace_distro_fd_find(self):
+        existing = self.prepare_fixture()
+        with contextlib.closing(tracking.open_database()) as db, db:
+            db.execute(
+                "INSERT INTO tracked_packages VALUES (?, ?, ?, ?)",
+                ("fd-find", "amd64", 90793418, "sharkdp/fd"),
+            )
+        patches = self.common_prepare_patches()
+        with contextlib.ExitStack() as stack:
+            for item in patches:
+                stack.enter_context(item)
+            stack.enter_context(patch(
+                "tracking.installed_package", return_value=("fd-find", "amd64", "10.3.0-2ubuntu1"),
+            ))
+            stack.enter_context(patch(
+                "tracking.resolve_repository", return_value=("sharkdp/fd", 90793418),
+            ))
+            stack.enter_context(patch("inspection.selected_assets", return_value=(
+                "v10.5.2",
+                "https://github.com/sharkdp/fd/releases/download/v10.5.2/fd_10.5.2_amd64.deb",
+                None,
+            )))
+            stack.enter_context(patch(
+                "inspection.inspect_fields", return_value=["fd", "amd64", "10.5.2"],
+            ))
+            with contextlib.redirect_stdout(io.StringIO()), \
+                 self.assertRaisesRegex(tracking.TrackingError, "Package name mismatch"):
+                updates.prepare("fd-find", "fd_10.5.2_amd64.deb")
+
+        self.assertIsNone(updates._prepared_row("fd-find", "amd64"))
+        self.assertEqual(updates._prepared_row("app", "amd64"), existing)
+        self.assertEqual(Path(existing[15]).read_bytes(), self.asset_bytes)
+        self.assertEqual(list(updates._updates_directory().glob(".partial-*")), [])
+        with contextlib.closing(tracking.open_database()) as db:
+            self.assertEqual(db.execute(
+                "SELECT repository_name, repository_id FROM tracked_packages WHERE package_name=?",
+                ("fd-find",),
+            ).fetchone(), ("sharkdp/fd", 90793418))
+
+    def test_apt_managed_bat_is_blocked_before_release_selection_or_download(self):
+        with contextlib.closing(tracking.open_database()) as db, db:
+            db.execute(
+                "INSERT INTO tracked_packages VALUES (?, ?, ?, ?)",
+                ("bat", "amd64", 130464961, "sharkdp/bat"),
+            )
+        policy = (
+            "bat:\n"
+            "  Installed: 0.25.0-5ubuntu1\n"
+            "  Candidate: 0.25.0-5ubuntu1\n"
+            "  Version table:\n"
+            " *** 0.25.0-5ubuntu1 500\n"
+            "        500 http://us.archive.ubuntu.com/ubuntu resolute/universe amd64 Packages\n"
+            "        100 /var/lib/dpkg/status\n"
+        )
+        with patch("tracking.installed_package", return_value=("bat", "amd64", "0.25.0-5ubuntu1")), \
+             patch("tracking.resolve_repository", return_value=("sharkdp/bat", 130464961)), \
+             patch("apt_handoff._run",
+                   return_value=SimpleNamespace(stdout=policy, stderr="", returncode=0)), \
+             patch("inspection.selected_assets") as select, \
+             patch("inspection.download") as download:
+            with self.assertRaisesRegex(tracking.TrackingError, "use the configured APT source"):
+                updates.prepare("bat", "bat_0.26.1_amd64.deb")
+            select.assert_not_called()
+            download.assert_not_called()
+        self.assertIsNone(updates._prepared_row("bat", "amd64"))
+        self.assertEqual(list(updates._updates_directory().glob("*.deb")), [])
 
     def _install_patches(self, plan=None, answer="yes", final_version="2.0"):
         if plan is None:

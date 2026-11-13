@@ -77,6 +77,30 @@ class SuggestionsTest(unittest.TestCase):
         self.assertIs(caught.exception.__cause__, error)
         self.assertEqual(query.call_args.kwargs["timeout"], 15)
 
+    def test_fd_find_homepage_outweighs_a_synthetic_exact_name_search_match(self):
+        direct = repo("sharkdp/fd", 90793418)
+        search = {
+            "items": [repo("example/fd-find", 1), direct],
+            "total_count": 2, "incomplete_results": False,
+        }
+        out = io.StringIO()
+        with patch("tracking.installed_package",
+                   return_value=("fd-find", "amd64", "10.3.0-2ubuntu1")), \
+             patch("suggestions.package_homepage",
+                   return_value="https://github.com/sharkdp/fd"), \
+             patch("tracking.github_get", side_effect=[direct, search]), \
+             patch("tracking.open_database", side_effect=AssertionError("must not open store")), \
+             contextlib.redirect_stdout(out):
+            suggestions.suggest("fd-find")
+
+        result = out.getvalue()
+        self.assertLess(result.index("https://github.com/sharkdp/fd\n"),
+                        result.index("https://github.com/example/fd-find\n"))
+        self.assertEqual(result.count("  https://github.com/sharkdp/fd\n"), 1)
+        self.assertIn("Match: Very high:", result)
+        self.assertIn("Match: High:", result)
+        self.assertIn("Nothing was saved.", result)
+
     def test_cli_homepage_timeout_prevents_search_or_database_writes(self):
         with patch.object(sys, "argv", ["beacon", "--suggest", "app"]), \
              patch("tracking.installed_package", return_value=("app", "amd64", "1.2.3")), \
