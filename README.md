@@ -6,12 +6,15 @@ installed package might have come from, helps users identify its upstream
 project, and lets users review selected upstream packages before handing an
 update to APT.
 
-The initial focus is Debian and Ubuntu. Discovery, source classification,
-GitHub upstream suggestions, manually confirmed release tracking, retained
-update preparation, and an explicitly approved APT handoff are implemented.
+The initial focus is Debian and Ubuntu. Beacon
+[v1.0.0](https://github.com/The-FKing-Projects/Beacon/releases/tag/v1.0.0)
+is the first stable CLI updater release, available as a GitHub Release Debian
+package and through the project's signed APT repository. Discovery, source
+classification, GitHub upstream suggestions, manually confirmed release
+tracking, retained update preparation, and an explicitly approved APT handoff
+are implemented.
 The updater path has passed isolated real-transaction tests and package
-qualification across the declared support matrix; Beacon's release process
-will designate the first stable version.
+qualification across the declared support matrix.
 
 ## Compatibility and validation
 
@@ -191,9 +194,9 @@ Releases can also be published to the project's self-hosted, GPG-signed aptly
 repository. See [APT publishing setup](docs/research/release-automation.md#self-hosted-apt-publishing)
 for runner requirements, enablement, and retry instructions.
 
-## Direction
+## Stable updater workflow
 
-The first end-to-end milestone is to:
+The v1 CLI implements the following end-to-end workflow:
 
 1. Discover an installed package that may not be maintained by a configured
    repository, and show why it is a candidate.
@@ -234,10 +237,31 @@ for the required repository settings. Direct pushes do not automatically
 release; the **Release** workflow also supports a manual run on `main` with
 an explicit version bump and release title.
 
-## Next steps
+## Post-v1 roadmap
 
-- Improve upstream suggestions with additional evidence and real-world cases.
-- Validate the end-to-end workflow against real standalone `.deb` packages and
-  expand version comparison only where it is reliable.
-- Designate and publish the first stable updater version through the normal
-  project release process.
+The proposed v1.1 focus is real-world discovery and update reliability. These
+are planned acceptance criteria, not claims of implemented support:
+
+1. **Broader real-world evidence.** Expand the
+   [discovery cases](docs/research/discovery-test-cases.md#post-v1-qualification-backlog)
+   beyond Beacon and CloverEye. Record expected identity, source evidence,
+   version comparison, asset selection, and verification limits. Turn useful
+   metadata cases into offline regression fixtures; keep live GitHub checks
+   separate from deterministic CI.
+2. **Better upstream suggestions.** Use those cases to identify which
+   additional evidence actually improves matches. Show conflicting evidence
+   and preserve explicit user confirmation; do not promote filename or
+   name similarity into proof of package provenance.
+3. **Reliable update comparisons.** Add version-format support only where
+   upstream tag interpretation is unambiguous and backed by regression cases.
+   Unsupported formats must remain explicitly unknown; use the selected
+   asset's full Debian version for installation decisions.
+4. **Preserved installation safety.** Exercise reviewed preparation and
+   installation with local fixtures in the isolated APT suite. Retain the
+   existing source confirmation, exact asset selection, fresh transaction
+   approval, removal/downgrade blocking, and post-install verification gates.
+
+Topgrade integration is a later design task: define how it reports updates
+and handles interactive approval without bypassing these gates before adding
+an integration. Direct Nala support and a GUI remain deferred. This roadmap
+does not add unattended installation or broaden the declared platform support.

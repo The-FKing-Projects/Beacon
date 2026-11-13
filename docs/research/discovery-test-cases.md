@@ -140,3 +140,29 @@ an already-current upstream version, ambiguous generic-name search, a
 separator-only name suggestion, and releases with and without a supported
 checksum manifest. They do not establish support for all projects, release
 formats, or Debian/Ubuntu versions.
+
+## Post-v1 qualification backlog
+
+The next qualification work should expand the observed cases rather than
+assume that successful self-updating or one third-party inspection generalizes.
+These are planned cases, not completed live validations:
+
+| Case | Evidence to record | Required behavior |
+| --- | --- | --- |
+| Package with a direct GitHub homepage | Installed metadata, repository identity, alternatives, and conflicting evidence | Prefer the direct-homepage evidence without automatically confirming the association |
+| Installed version also managed by APT | Exact installed-version origins and available APT candidate | Report APT ownership and preserve the existing handoff policy |
+| Ambiguous or renamed package/asset | Internal package identity, filename hints, architecture, and competing assets | Require exact user selection; reject internal identity or architecture mismatches |
+| Unsupported upstream tag/version | Installed Debian version, exact release tag, and selected asset version | Report unknown release comparison unless a supported mapping is established; use full Debian comparison for the selected asset |
+| Interrupted or changed preparation | Pinned release/asset identity, digest, persisted association, and artifact state | Report the failure, preserve valid state, and reject stale or changed installation inputs |
+
+For each new live case, record the observation date, package and architecture,
+command results, and what was and was not verified. Use temporary Beacon state
+and artifact directories so exploratory tracking does not alter normal user
+associations. Do not copy private metadata into fixtures; retain only the
+minimal public or synthetic inputs needed to reproduce the behavior.
+
+Live inspection may download an explicitly selected public asset, but is not
+permission to install third-party packages on a developer's host. Exercise
+installation failure and transaction cases with locally built fixture packages
+inside the existing isolated APT suite. Keep that evidence distinct from
+real-project metadata inspection and from the declared distro matrix.

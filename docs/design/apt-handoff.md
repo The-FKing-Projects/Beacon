@@ -226,7 +226,9 @@ functional loopback interface. The profile is unconfined and permits user
 namespaces for Bubblewrap and its children, weakening Ubuntu's user-namespace
 restriction on that VM; it does not change kernel-wide user-namespace settings
 or the developer's host.
-Its effectiveness on GitHub-hosted runners still requires CI verification.
+The native Ubuntu 24.04 job and five-target package matrix passed in the
+[post-v1 workflow run](https://github.com/The-FKing-Projects/Beacon/actions/runs/43396669819).
+This records that run's result, not a guarantee of future runner behavior.
 Tests are opt-in for local runs:
 
 ```sh
