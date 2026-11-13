@@ -1,3 +1,9 @@
+beacon (1.0.0-1) unstable; urgency=medium
+
+  * Release for workflow run 43392202499: Beacon 1.0.0 stable release.
+
+ -- The FK'ing Projects <FiendKing04@gmail.com>  Fri, 13 Nov 2026 08:18:37 +0000
+
 beacon (0.9.4-1) unstable; urgency=medium
 
   * Release for workflow run 42764989348: Bounded package discovery commands.
