@@ -281,8 +281,11 @@ asset into a reviewed APT transaction. APT, PPAs, Flatpak, and Snap remain
 useful and supported parts of the desktop ecosystem; their existing package
 managers and Topgrade should handle the update workflows they already
 provide. Beacon hands installation and dependency resolution to APT for its
-explicitly reviewed `.deb` updates. RPM- and Arch-based discovery and other
-installation formats are not current Beacon support.
+explicitly reviewed `.deb` updates. Arch support is not currently on the
+roadmap because pacman and the AUR already cover that ecosystem's package
+workflows. RPM support is a possible future evaluation, not a commitment:
+supporting the Red Hat and SUSE branches would require separate compatibility
+and maintenance decisions. Neither is currently supported.
 
 ## Releases
 
