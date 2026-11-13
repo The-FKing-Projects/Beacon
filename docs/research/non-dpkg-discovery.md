@@ -28,10 +28,12 @@ but desktop entries describe launchers and are not an installation database.
 
 ## Recommendation
 
-1. Keep APT/dpkg discovery and the standalone local `.deb` updater as Beacon's
-   product scope. Beacon addresses packages with no configured repository or
-   built-in updater; this complements, rather than replaces, normal package
-   management.
+1. Keep APT/dpkg discovery and standalone local `.deb` updates as Beacon's
+   product scope. Target packages that are not available from a configured
+   APT repository or PPA. A built-in updater or version checker does not
+   exclude a package when it only reports a release or points the user to a
+   download; Beacon can help review that asset and hand its installation to
+   APT.
 2. Do not add Flatpak or Snap inventory/update adapters merely to reproduce
    capabilities already provided by those managers and Topgrade. If a
    concrete classification need arises, consult their documented read-only

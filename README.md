@@ -1,9 +1,11 @@
 # Beacon
 
-Beacon aims to help keep standalone Debian packages up to date when they have
-no configured repository or built-in updater. It investigates where an
+Beacon helps keep standalone Debian packages up to date when no configured
+APT repository or PPA provides them. An application may have its own update
+checker; Beacon can still help when that checker only points to a download and
+leaves installing the update to the user. Beacon investigates where an
 installed package might have come from, helps users identify its upstream
-project, and lets users review selected upstream packages before handing an
+project, and lets users review a selected release asset before handing the
 update to APT.
 
 The initial focus is Debian and Ubuntu. Beacon
@@ -271,13 +273,16 @@ Not every package will have an identifiable upstream or suitable release.
 - Creating another Linux package manager
 - Silently installing packages or treating a confidence score as proof of trust
 
-Beacon fills the gap for standalone local `.deb` packages that lack a
-configured package source or their own updater. APT, PPAs, Flatpak, and Snap
-remain useful and supported parts of the desktop ecosystem; their existing
-package managers and Topgrade should handle the update workflows they already
+Beacon covers standalone local `.deb` packages that are not available from a
+configured APT repository or PPA, whether or not an application includes its
+own update checker. A checker that only directs the user to a download does
+not itself update the installed package; Beacon can help turn that release
+asset into a reviewed APT transaction. APT, PPAs, Flatpak, and Snap remain
+useful and supported parts of the desktop ecosystem; their existing package
+managers and Topgrade should handle the update workflows they already
 provide. Beacon hands installation and dependency resolution to APT for its
-own explicitly reviewed `.deb` updates. RPM- and Arch-based discovery and
-other installation formats are not current Beacon support.
+explicitly reviewed `.deb` updates. RPM- and Arch-based discovery and other
+installation formats are not current Beacon support.
 
 ## Releases
 
