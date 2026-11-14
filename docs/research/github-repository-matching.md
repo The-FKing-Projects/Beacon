@@ -182,7 +182,10 @@ probabilities; a calibrated score is deferred until there is a labeled
 true/false-match set. Search is currently limited to package-name results and
 does not yet use display names, package descriptions, maintainer
 relationships, README search, or aliases. A search-only candidate is not
-treated as a match.
+treated as a match. The direct-homepage tier requires an exact HTTPS GitHub
+repository URL; fragments such as `#readme` or a marketing site that is not
+`github.com/<owner>/<repo>` prevent that tier even when a human can recognize
+the upstream.
 
 ## References
 
