@@ -199,9 +199,10 @@ Debian revision or a release asset's package version; equal upstream versions
 do not establish that the packages are identical or equally current. Epochs,
 distro-specific revisions such as `-1ubuntu1` or `+ds`, build-suffixed installed
 versions, prereleases, and other tag formats are reported as unknown. Use
-`--inspect` for the selected asset's full Debian version comparison. Dated
-desktop examples are recorded in the
-[discovery cases](docs/research/discovery-test-cases.md#kubuntu-2604-beacon-v112-operator-reported-summary).
+`--inspect` for the selected asset's full Debian version comparison.
+Operator-reported desktop examples and comparison rules are recorded in the
+[discovery cases](docs/research/discovery-test-cases.md#kubuntu-2604-beacon-v112-operator-reported-summary)
+(undated summary, not a dated qualification transcript).
 
 `--inspect` downloads the exact named asset from the tracked repository's
 latest stable release into a temporary directory, compares its package name,
