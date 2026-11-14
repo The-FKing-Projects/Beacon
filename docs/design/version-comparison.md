@@ -6,7 +6,8 @@ command uses which, and when `--check` prints
 
 This describes the **current** implementation in `tracking.compare_versions`
 (used by `--check`) and `inspection.version_relation` (used by `--inspect` /
-`--prepare`). It does not authorize broader tag formats.
+`--prepare`). It does not authorize broader tag formats beyond the narrow
+exceptions below.
 
 ## `--check`: installed package vs release tag
 
@@ -15,7 +16,8 @@ This describes the **current** implementation in `tracking.compare_versions`
 `.deb` asset's internal version. Asset selection and Debian-direction decisions
 happen later with `--inspect` / `--prepare`.
 
-Implementation: `src/tracking.py` (`VERSION_PATTERN`, `compare_versions`).
+Implementation: `src/tracking.py` (`VERSION_PATTERN`,
+`DEBIAN_UPSTREAM_REPACK_SUFFIX`, `compare_versions`).
 
 ### What is comparable
 
@@ -23,13 +25,16 @@ Both sides must fit a narrow shape:
 
 | Side | Accepted form |
 | --- | --- |
-| Release tag | Exactly three numeric components, optional leading `v`: `1.2.3` or `v1.2.3`. No leading zeros on a component except a lone `0`. |
-| Installed version | The same three-component upstream form, **or** that form plus a single `-` and a **purely numeric** Debian revision: `1.2.3-1`, `0.8.1-1`, `1.2.3-99`. |
+| Release tag | Exactly three numeric components, optional leading `v`: `1.2.3` or `v1.2.3`. No leading zeros on a component except a lone `0`. No other prefixes/suffixes. |
+| Installed version | The same three-component upstream form, optionally with a Debian repack marker `+ds`, `+dsN`, `+dfsg`, or `+dfsgN` on that upstream portion, **and/or** a single `-` plus a **purely numeric** Debian revision. Examples: `1.2.3`, `1.2.3-1`, `3.27.0+ds-1`, `1.2.3+dfsg2`. |
 
 When a numeric Debian revision is present, Beacon compares **only** the
 upstream triples (`1.2.3` vs the tag). It then appends that the installed
-Debian revision was not compared. Equal upstream triples print
-`Upstream versions match.` (with a revision) or `Versions match.` (without).
+Debian revision was not compared. When a `+ds` / `+dfsg` (optional digits)
+suffix was stripped from the installed upstream portion, Beacon appends that
+that suffix was ignored for the comparison. Equal upstream triples print
+`Upstream versions match.` when a revision or ignored repack suffix was
+present, otherwise `Versions match.`
 
 Examples that compare today:
 
@@ -40,6 +45,8 @@ Examples that compare today:
 | `1.2.4` | `1.2.3` | Installed version is newer than the latest upstream release |
 | `0.8.1-1` | `v0.8.2` | Newer upstream…; revision `1` not compared |
 | `1.2.3-1` | `v1.2.3` | Upstream versions match…; revision `1` not compared |
+| `3.27.0+ds-1` | `v3.29.0` | Newer upstream…; revision `1` not compared; `+ds` ignored |
+| `1.2.3+dfsg2` | `v1.2.3` | Upstream versions match…; `+dfsg2` ignored |
 
 ### What stays unknown
 
@@ -49,10 +56,10 @@ If either side fails the rules above, `--check` reports
 | Kind | Examples | Why unknown |
 | --- | --- | --- |
 | Epoch on the installed version | `1:1.2.3-1`, `3:20240117-1ubuntu0.1` | Epoch/`:` is outside the upstream pattern |
-| Distro or vendor revision text | `1.2.3-1ubuntu1`, `0.25.0-5ubuntu1`, `1.2.3-1~deb12u1`, `1.2.3-1+b1` | Revision after the first `-` is not purely numeric |
-| `+ds` / similar in the upstream portion | `3.27.0+ds-1` (Kubuntu `spdx-licenses`) | After splitting on the first `-`, the left side is `3.27.0+ds`, which is not `X.Y.Z` |
+| Distro or vendor revision text | `1.2.3-1ubuntu1`, `0.25.0-5ubuntu1`, `1.2.3-1~deb12u1`, `1.2.3-1+b1`, `3.27.0+ds-1ubuntu1` | Revision after the first `-` is not purely numeric |
+| Other `+` suffixes on upstream | `1.2.3+git20200101`, `1.2.3+other-1` | Only lowercase `+ds` / `+dfsg` with optional digits are ignored |
 | Build-suffixed installed versions | `3.7.1-build.50` (Kubuntu `github-desktop`) | Revision `build.50` is not purely numeric |
-| Non-standard release tags | `release-3.4.13-linux1` (Kubuntu `github-desktop`), `20250605`, `v1.2.4-beta`, `v1.2.4-1` | Tag is not exactly optional `v` + three numeric components |
+| Non-standard release tags | `release-3.4.13-linux1` (Kubuntu `github-desktop`), `20250605`, `v1.2.4-beta`, `v1.2.4-1` | Tag is not exactly optional `v` + three numeric components; no safe prefix/suffix mapping |
 | Wrong component count | Installed `1.2`, tag `v1.2.3` | Must be exactly three components |
 | Leading zeros on a component | `01.2.3-1` | Components use `(0\|[1-9][0-9]*)` |
 | Extra hyphens in the revision | `1.2.3-1-2`, empty revision `1.2.3-` | Revision must be one run of digits |
@@ -66,8 +73,8 @@ you need the asset's full Debian version direction.
 
 - Equal upstream triples do **not** prove the packages are identical, equally
   current, or safe to install.
-- `--check` never compares the Debian revision or the selected asset's
-  package version.
+- `--check` never compares the Debian revision, ignored `+ds`/`+dfsg` markers,
+  or the selected asset's package version as install approval.
 - Filename “likely” hints are separate from version comparison.
 
 ## `--inspect` / `--prepare`: full Debian version of the selected asset
@@ -89,25 +96,26 @@ Gates that still apply (unchanged by this document):
 - Digests and unsigned `SHA256SUMS` entries are integrity evidence, not
   publisher authenticity.
 
-## Kubuntu v1.1.2 operator evidence (when unknown showed up)
+## Kubuntu v1.1.2 operator evidence
 
 From the undated Kubuntu 26.04 operator-reported summary (not a dated
 transcript):
 
-| Package | Installed vs tag (as reported) | Expected `--check` outcome |
+| Package | Installed vs tag (as reported) | `--check` outcome |
 | --- | --- | --- |
-| `github-desktop` | `3.7.1-build.50` vs `release-3.4.13-linux1` | Unknown (build revision + non-standard tag) |
-| `spdx-licenses` | `3.27.0+ds-1` vs `v3.29.0` | Unknown (`+ds` in upstream portion); also no `.deb` assets upstream |
+| `github-desktop` | `3.7.1-build.50` vs `release-3.4.13-linux1` | **Unknown** (build revision + non-standard tag; no safe mapping) |
+| `spdx-licenses` | `3.27.0+ds-1` vs `v3.29.0` | **Comparable** after ignoring `+ds` (still no `.deb` assets upstream, so Beacon cannot prepare/install from GitHub) |
 | Successful upgrades such as `clover-eye` / `moonfin` | Ordinary numeric triples (with or without numeric revisions) | Comparable when both sides fit the rules above |
 
-Lab note: installed `3:20240117-1ubuntu0.1` vs tag `20250605` is also unknown
+Lab note: installed `3:20240117-1ubuntu0.1` vs tag `20250605` remains unknown
 (epoch + `ubuntu` revision + non-`X.Y.Z` tag).
 
 ## Follow-up (not in this change)
 
-Broader tag or revision support remains backlog: add formats only with
-unambiguous mappings and offline regressions. Until then, leave unsupported
-forms unknown and rely on `--inspect` for selected-asset Debian direction.
+Further tag or revision support remains backlog: add formats only with
+unambiguous mappings and offline regressions. `release-…-linux*` tags,
+`-build.*` revisions, epochs, and `ubuntu` revisions stay unknown until then.
+Rely on `--inspect` for selected-asset Debian direction.
 
 Related: [discovery test cases](../research/discovery-test-cases.md),
 [APT handoff](apt-handoff.md).

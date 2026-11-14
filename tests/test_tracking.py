@@ -100,6 +100,15 @@ class TrackingTest(unittest.TestCase):
             ("1.2.3-1", "v1.2.4-1"): "Unknown: versions cannot be compared safely.",
             ("1.2.3-1", "v1.2.4-beta"): "Unknown: versions cannot be compared safely.",
             ("01.2.3-1", "v1.2.4"): "Unknown: versions cannot be compared safely.",
+            # Kubuntu github-desktop: no safe mapping for build revision or release-*-linux* tags.
+            ("3.7.1-build.50", "release-3.4.13-linux1"):
+                "Unknown: versions cannot be compared safely.",
+            ("3.7.1-build.50", "v3.7.1"): "Unknown: versions cannot be compared safely.",
+            ("3.7.1", "release-3.4.13-linux1"): "Unknown: versions cannot be compared safely.",
+            # Arbitrary + suffixes are not Debian +ds/+dfsg repacks.
+            ("1.2.3+git20200101", "v1.2.4"): "Unknown: versions cannot be compared safely.",
+            ("1.2.3+other-1", "v1.2.4"): "Unknown: versions cannot be compared safely.",
+            ("1.2.3+DS-1", "v1.2.4"): "Unknown: versions cannot be compared safely.",
         }
         for (installed, tag), expected in cases.items():
             with self.subTest(installed=installed, tag=tag):
@@ -123,6 +132,47 @@ class TrackingTest(unittest.TestCase):
                     f"{status} Comparing upstream versions only; installed Debian revision "
                     f"{revision} is not compared.",
                 )
+
+    def test_debian_ds_dfsg_upstream_suffixes_compare_to_simple_tags(self):
+        # Kubuntu spdx-licenses-style +ds with numeric Debian revision.
+        self.assertEqual(
+            tracking.compare_versions("3.27.0+ds-1", "v3.29.0"),
+            "Newer upstream release available. Comparing upstream versions only; "
+            "installed Debian revision 1 is not compared. "
+            "Debian upstream suffix +ds is ignored for this comparison.",
+        )
+        self.assertEqual(
+            tracking.compare_versions("3.27.0+ds-1", "v3.27.0"),
+            "Upstream versions match. Comparing upstream versions only; "
+            "installed Debian revision 1 is not compared. "
+            "Debian upstream suffix +ds is ignored for this comparison.",
+        )
+        self.assertEqual(
+            tracking.compare_versions("1.2.3+dfsg-2", "v1.2.4"),
+            "Newer upstream release available. Comparing upstream versions only; "
+            "installed Debian revision 2 is not compared. "
+            "Debian upstream suffix +dfsg is ignored for this comparison.",
+        )
+        self.assertEqual(
+            tracking.compare_versions("1.2.3+ds1", "v1.2.3"),
+            "Upstream versions match. "
+            "Debian upstream suffix +ds1 is ignored for this comparison.",
+        )
+        self.assertEqual(
+            tracking.compare_versions("1.2.3+dfsg2-1", "v1.2.2"),
+            "Installed version is newer than the latest upstream release. "
+            "Comparing upstream versions only; installed Debian revision 1 is not compared. "
+            "Debian upstream suffix +dfsg2 is ignored for this comparison.",
+        )
+        # +ds does not make non-numeric revisions or odd tags comparable.
+        self.assertEqual(
+            tracking.compare_versions("3.27.0+ds-1ubuntu1", "v3.29.0"),
+            "Unknown: versions cannot be compared safely.",
+        )
+        self.assertEqual(
+            tracking.compare_versions("3.27.0+ds-1", "release-3.29.0"),
+            "Unknown: versions cannot be compared safely.",
+        )
 
     def test_track_check_and_preserve_decisions(self):
         with patch("tracking.installed_package", return_value=("app", "amd64", "1.2.3")), \

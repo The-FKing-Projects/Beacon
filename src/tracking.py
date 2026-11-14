@@ -19,6 +19,9 @@ from urllib.request import Request, urlopen
 PACKAGE_PATTERN = re.compile(r"^[a-z0-9][a-z0-9+.-]*(?::[a-z0-9][a-z0-9-]*)?$")
 REPOSITORY_PATTERN = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9_.-]+$")
 VERSION_PATTERN = re.compile(r"^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
+# Debian repack markers on the upstream version (e.g. 3.27.0+ds-1). Only these
+# exact suffixes are ignored for --check; arbitrary +git / +other forms stay unknown.
+DEBIAN_UPSTREAM_REPACK_SUFFIX = re.compile(r"\+(?:ds|dfsg)\d*$")
 ASSET_ARCHITECTURES = {
     "amd64": "amd64", "x86_64": "amd64", "x64": "amd64",
     "arm64": "arm64", "aarch64": "arm64",
@@ -564,11 +567,25 @@ def _remove_prepared_artifact(artifact, context):
         ) from exc
 
 
+def _comparable_installed_upstream(upstream):
+    """Return (VERSION_PATTERN match, ignored_repack_suffix_or_None) or (None, None)."""
+    match = VERSION_PATTERN.fullmatch(upstream)
+    if match:
+        return match, None
+    stripped = DEBIAN_UPSTREAM_REPACK_SUFFIX.sub("", upstream)
+    if stripped == upstream:
+        return None, None
+    match = VERSION_PATTERN.fullmatch(stripped)
+    if not match:
+        return None, None
+    return match, upstream[len(stripped):]
+
+
 def compare_versions(installed, tag):
     upstream, separator, revision = installed.partition("-")
     if separator and not re.fullmatch(r"[0-9]+", revision):
         return "Unknown: versions cannot be compared safely."
-    left = VERSION_PATTERN.fullmatch(upstream)
+    left, ignored_repack = _comparable_installed_upstream(upstream)
     right = VERSION_PATTERN.fullmatch(tag)
     if not left or not right:
         return "Unknown: versions cannot be compared safely."
@@ -577,13 +594,17 @@ def compare_versions(installed, tag):
     if latest > current:
         status = "Newer upstream release available."
     elif latest == current:
-        status = "Upstream versions match." if separator else "Versions match."
+        status = "Upstream versions match." if (separator or ignored_repack) else "Versions match."
     else:
         status = "Installed version is newer than the latest upstream release."
     if separator:
         status += (
             f" Comparing upstream versions only; installed Debian revision {revision}"
             " is not compared."
+        )
+    if ignored_repack:
+        status += (
+            f" Debian upstream suffix {ignored_repack} is ignored for this comparison."
         )
     return status
 
