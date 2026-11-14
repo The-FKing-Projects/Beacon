@@ -2,12 +2,14 @@
 
 These fixtures reflect APT and dpkg metadata inspected on 2026-11-07, a
 user-provided Kubuntu 26.04.1 snapshot from 2026-11-08, available package
-metadata and public release inspections from 2026-11-13/14, and a
-user-reported Beacon v1.1.2 end-to-end qualification on Kubuntu 26.04
-(Beacon installed from the signed APT repository). Deterministic fixtures
-exercise package parsing without requiring network access or packages to be
-installed in the test environment. Live desktop results are dated snapshots,
-not guarantees about future upstream releases.
+metadata and public release inspections from 2026-11-13/14, and an
+operator-reported Beacon v1.1.2 desktop summary on Kubuntu 26.04 (Beacon
+installed from the signed APT repository). Deterministic fixtures exercise
+package parsing without requiring network access or packages to be installed
+in the test environment. Dated live records (for example the 2026-11-10
+Beacon/CloverEye workflows and 2026-11-13/14 lab notes) are snapshots, not
+guarantees about future upstream releases. The Kubuntu v1.1.2 section below
+is an undated operator-reported summary, not a dated transcript.
 
 | Package | Observed evidence | Expected result |
 | --- | --- | --- |
@@ -317,11 +319,14 @@ providers, or treating digests as authenticity proofs.
 | | Prereleases, non-numeric tags, or tags that are not exactly three numeric components |
 
 Equal upstream versions from `--check` do **not** mean the packages are
-identical. `--inspect` / `--prepare` use the asset's full Debian version for
-direction and still require an exact package-name match plus a compatible
-architecture: the asset architecture must equal the installed architecture or
-be `all`. Expanding the supported tag set is backlog work and needs
-unambiguous mappings plus offline regressions before any code change.
+identical. `--inspect` and `--prepare` both use the asset's full Debian
+version for direction and require an exact package-name match, but their
+architecture gates differ: `--inspect` accepts an asset architecture equal to
+the installed architecture **or** `all`; `--prepare` requires the asset
+architecture to equal the installed architecture exactly and therefore blocks
+an `all` asset when the installation is architecture-specific. Expanding the
+supported tag set is backlog work and needs unambiguous mappings plus offline
+regressions before any code change.
 
 ## Supporting lab observations (2026-11-14)
 
@@ -341,10 +346,10 @@ third-party package installations; temporary `XDG_STATE_HOME` only):
 ## Post-v1 qualification status
 
 v1.1.x turned several original backlog rows into offline regressions and
-dated live observations, including the Kubuntu 26.04 v1.1.2 operator-reported
-summary above. Fixture coverage and one host's upgrades still do not
-generalize to every project; keep expanding cases rather than weakening
-confirmation or integrity gates.
+dated live observations plus the undated Kubuntu 26.04 v1.1.2
+operator-reported summary above. Fixture coverage and one host's upgrades
+still do not generalize to every project; keep expanding cases rather than
+weakening confirmation or integrity gates.
 
 | Case | Offline / fixture coverage | Live observation | Still needed |
 | --- | --- | --- | --- |
