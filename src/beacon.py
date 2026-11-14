@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 VERSION = "1.0.0"
+BEACON_MARK = "◆"
 
 import os
 import re
@@ -20,13 +21,13 @@ import updates
 
 def print_banner():
     print("=================================")
-    print(" Beacon Discovery Engine")
+    print(f" {BEACON_MARK} Beacon Discovery Engine")
     print("=================================")
     print()
 
 
 def help_menu():
-    print("Beacon Discovery Engine")
+    print(f"{BEACON_MARK} Beacon Discovery Engine")
     print()
     print("Usage:")
     print("    beacon <package>")

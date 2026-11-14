@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="64"
+     height="64"
+     viewBox="0 0 64 64"
+     role="img"
+     aria-labelledby="title description">
+  <title id="title">Beacon mark</title>
+  <desc id="description">A focused signal beam guiding a package.</desc>
+  <circle cx="32" cy="32" r="30" fill="#163A40"/>
+  <path d="M32 7 37 14.5 32 22 27 14.5Z" fill="#F0C552"/>
+  <path d="m17 15.5 6 3.5m24-3.5-6 3.5" fill="none" stroke="#F0C552" stroke-linecap="round" stroke-width="2.5"/>
+  <path d="m29 22-5 9h16l-5-9Z" fill="#F0C552"/>
+  <path d="m20 36 12-6.5L44 36v14l-12 6-12-6Z" fill="#F4F0E5"/>
+  <path d="m20 36 12 6.5L44 36M32 42.5V56m-8-22.7 8 4.4 8-4.4" fill="none" stroke="#163A40" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.3"/>
+</svg>

@@ -1,4 +1,4 @@
-# Beacon
+<h1><img src="assets/brand/beacon-mark.svg" width="32" height="32" alt="" /> Beacon</h1>
 
 Beacon helps keep standalone Debian packages up to date when no configured
 APT repository or PPA provides them. An application may have its own update

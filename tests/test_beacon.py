@@ -23,6 +23,7 @@ class BeaconProvenanceConfidenceTest(unittest.TestCase):
             help_menu()
 
         help_text = output.getvalue()
+        self.assertIn("◆ Beacon Discovery Engine", help_text)
         self.assertIn("Usage:\n    beacon <package>", help_text)
         self.assertIn("    beacon --scan", help_text)
         self.assertNotIn("beacon.py", help_text)
