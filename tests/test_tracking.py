@@ -621,6 +621,18 @@ class TrackingTest(unittest.TestCase):
             ({"assets": [None]}, "invalid release asset"),
             ({"assets": [{"name": "app.deb", "browser_download_url": "https://evil.test/app.deb"}]},
              "invalid Debian asset URL"),
+            ({"assets": [{"name": "app.deb", "browser_download_url":
+                          "https://github.com/other/repo/releases/download/v1/app.deb"}]},
+             "invalid Debian asset URL"),
+            ({"assets": [{"name": "app.deb", "browser_download_url":
+                          "https://github.com/owner/repo/releases/download/v2/app.deb"}]},
+             "invalid Debian asset URL"),
+            ({"assets": [{"name": "app.deb", "browser_download_url":
+                          "https://github.com/owner/repo/releases/download/v1/other.deb"}]},
+             "invalid Debian asset URL"),
+            ({"assets": [{"name": "app.deb", "browser_download_url":
+                          "https://github.com/owner/repo/releases/download/v1/app.deb?download=1"}]},
+             "invalid Debian asset URL"),
             ({"assets": [{"name": "app\n.deb", "browser_download_url": "https://github.com/a/b"}]},
              "invalid Debian release asset"),
         ]

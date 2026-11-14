@@ -425,8 +425,7 @@ def latest_release(name):
                 or not isinstance(asset_url, str)
                 or any(ord(char) < 32 or ord(char) == 127 for char in asset_url)):
             raise TrackingError("GitHub returned an invalid Debian release asset.")
-        parsed_asset = urlparse(asset_url)
-        if parsed_asset.scheme != "https" or parsed_asset.netloc.lower() != "github.com":
+        if not _valid_release_asset_url(asset_url, name, tag, filename):
             raise TrackingError("GitHub returned an invalid Debian asset URL.")
         deb_assets.append((filename, asset_url))
     return tag, url, deb_assets
