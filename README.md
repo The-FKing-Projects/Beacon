@@ -147,6 +147,7 @@ beacon --suggest <package>
 beacon --track <package> <owner/repository>
 beacon --tracked
 beacon --check <package>
+beacon --check-all
 beacon --inspect <package> <exact-asset-filename.deb>
 beacon --prepare <package> <exact-asset-filename.deb>
 beacon --install <package>
@@ -184,11 +185,16 @@ or an association changed by another process during confirmation is reported
 as an error rather than deleting a different entry.
 
 Checks query the public GitHub API without authentication and show the latest
-published stable release and its `.deb` assets. Beacon suggests likely assets
-when the filename resembles the installed package name and specifies a
-matching architecture (or `all`); it also shows other `.deb` assets for manual
-review and flags multiple likely candidates. Filenames are only hints: this
-check does not verify asset contents, compatibility, package identity, or integrity.
+published stable release and its `.deb` assets. `--check-all` runs the same
+release check for every confirmed association and prints a per-package summary
+(`current`, `update available`, `installed newer`, `unknown`, or `error`). It
+is read-only: one package failure does not stop the rest, and the command never
+prepares, installs, or approves an APT transaction. Use `--check <package>` for
+asset filename suggestions. Beacon suggests likely assets when the filename
+resembles the installed package name and specifies a matching architecture (or
+`all`); it also shows other `.deb` assets for manual review and flags multiple
+likely candidates. Filenames are only hints: this check does not verify asset
+contents, compatibility, package identity, or integrity.
 Network errors, interrupted API responses, rate limits, unavailable releases,
 and changed repository identities are reported without replacing saved
 associations. Failed requests are not retried automatically; retry the command

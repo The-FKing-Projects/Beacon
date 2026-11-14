@@ -14,7 +14,9 @@ exceptions below.
 `--check` compares the **installed Debian package version string** to the
 **latest stable GitHub release tag**. It does **not** look at a selected
 `.deb` asset's internal version. Asset selection and Debian-direction decisions
-happen later with `--inspect` / `--prepare`.
+happen later with `--inspect` / `--prepare`. `--check-all` reuses the same
+comparison for every tracked package and only prints a summary; it never
+prepares or installs updates.
 
 Implementation: `src/tracking.py` (`VERSION_PATTERN`,
 `DEBIAN_UPSTREAM_REPACK_SUFFIX`, `compare_versions`).

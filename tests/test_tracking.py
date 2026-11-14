@@ -174,6 +174,121 @@ class TrackingTest(unittest.TestCase):
             "Unknown: versions cannot be compared safely.",
         )
 
+    def test_check_outcome_labels(self):
+        self.assertEqual(
+            tracking.check_outcome("Newer upstream release available."),
+            "update available",
+        )
+        self.assertEqual(tracking.check_outcome("Versions match."), "current")
+        self.assertEqual(
+            tracking.check_outcome(
+                "Upstream versions match. Comparing upstream versions only; "
+                "installed Debian revision 1 is not compared."
+            ),
+            "current",
+        )
+        self.assertEqual(
+            tracking.check_outcome("Installed version is newer than the latest upstream release."),
+            "installed newer",
+        )
+        self.assertEqual(
+            tracking.check_outcome("Unknown: versions cannot be compared safely."),
+            "unknown",
+        )
+
+    def test_check_all_summarizes_and_soft_fails_per_package(self):
+        with contextlib.closing(tracking.open_database()) as db, db:
+            db.execute(
+                "INSERT INTO tracked_packages VALUES (?, ?, ?, ?)",
+                ("app", "amd64", 1, "Owner/App"),
+            )
+            db.execute(
+                "INSERT INTO tracked_packages VALUES (?, ?, ?, ?)",
+                ("other", "all", 2, "Owner/Other"),
+            )
+            db.execute(
+                "INSERT INTO tracked_packages VALUES (?, ?, ?, ?)",
+                ("broken", "amd64", 3, "Owner/Broken"),
+            )
+
+        def fake_installed(package):
+            mapping = {
+                "app:amd64": ("app", "amd64", "1.2.3"),
+                "other:all": ("other", "all", "2.0.0-1"),
+                "broken:amd64": ("broken", "amd64", "9.0.0"),
+            }
+            if package not in mapping:
+                raise tracking.TrackingError(f"unexpected package {package}")
+            return mapping[package]
+
+        def fake_resolve(name):
+            return {
+                "Owner/App": ("Owner/App", 1),
+                "Owner/Other": ("Owner/Other", 2),
+                "Owner/Broken": ("Owner/Broken", 3),
+            }[name]
+
+        def fake_release(repository):
+            if repository == "Owner/App":
+                return ("v1.2.4", "https://github.com/Owner/App/releases/tag/v1.2.4", [])
+            if repository == "Owner/Other":
+                return ("v2.0.0", "https://github.com/Owner/Other/releases/tag/v2.0.0", [])
+            raise tracking.TrackingError("rate limited")
+
+        out = io.StringIO()
+        with patch("tracking.installed_package", side_effect=fake_installed), \
+             patch("tracking.resolve_repository", side_effect=fake_resolve), \
+             patch("tracking.latest_release", side_effect=fake_release), \
+             patch("updates.prepare", side_effect=AssertionError("must not prepare")), \
+             patch("updates.install", side_effect=AssertionError("must not install")), \
+             contextlib.redirect_stdout(out):
+            with self.assertRaisesRegex(tracking.TrackingError, "1 tracked package"):
+                tracking.check_all()
+        result = out.getvalue()
+        self.assertIn("read-only; nothing is prepared or installed", result)
+        self.assertIn("app:amd64", result)
+        self.assertIn("Result: update available", result)
+        self.assertIn("other:all", result)
+        self.assertIn("Result: current", result)
+        self.assertIn("broken:amd64", result)
+        self.assertIn("Result: error", result)
+        self.assertIn("rate limited", result)
+        self.assertIn(
+            "Summary: 1 current, 1 update available, 0 installed newer, 0 unknown, 1 error",
+            result,
+        )
+        self.assertIn("No packages were prepared or installed.", result)
+        self.assertIn("run --check for filename suggestions", result)
+
+    def test_check_all_empty_and_cli_wiring(self):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            tracking.check_all()
+        self.assertIn("No confirmed upstream associations.", out.getvalue())
+
+        self.save_association()
+        cli_out = io.StringIO()
+        with patch.object(sys, "argv", ["beacon", "--check-all"]), \
+             patch("tracking.installed_package", return_value=("app", "amd64", "1.2.3")), \
+             patch("tracking.resolve_repository", return_value=("Owner/Project", 123)), \
+             patch("tracking.latest_release",
+                   return_value=("v1.2.3", "https://github.com/Owner/Project/releases/tag/v1.2.3", [])), \
+             patch("updates.prepare", side_effect=AssertionError("must not prepare")), \
+             patch("updates.install", side_effect=AssertionError("must not install")), \
+             contextlib.redirect_stdout(cli_out):
+            beacon.main()
+        text = cli_out.getvalue()
+        self.assertIn("Result: current", text)
+        self.assertIn("Summary: 1 current, 0 update available, 0 installed newer, 0 unknown, 0 error", text)
+
+        err = io.StringIO()
+        with patch.object(sys, "argv", ["beacon", "--check-all", "extra"]), \
+             contextlib.redirect_stderr(err):
+            with self.assertRaises(SystemExit) as result:
+                beacon.main()
+        self.assertEqual(result.exception.code, 1)
+        self.assertIn("Invalid arguments for --check-all", err.getvalue())
+
     def test_track_check_and_preserve_decisions(self):
         with patch("tracking.installed_package", return_value=("app", "amd64", "1.2.3")), \
              patch("tracking.resolve_repository", return_value=("Owner/Project", 123)), \

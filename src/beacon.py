@@ -43,6 +43,7 @@ def help_menu():
     print("    --untrack <package>            Remove a confirmed association.")
     print("    --suggest <package>            Suggest GitHub upstreams.")
     print("    --check <package>              Check its latest GitHub release.")
+    print("    --check-all                    Summarize release checks for all tracked packages.")
     print("    --inspect <package> <asset.deb> Inspect a selected release asset.")
     print("    --prepare <package> <asset.deb> Download and pin a selected update.")
     print("    --install <package>            Review and install a prepared update through APT.")
@@ -547,13 +548,14 @@ def local_summary():
 def _main():
 
     if len(sys.argv) > 1 and sys.argv[1] in (
-        "--track", "--untrack", "--check", "--tracked", "--suggest",
+        "--track", "--untrack", "--check", "--check-all", "--tracked", "--suggest",
         "--inspect", "--prepare", "--install",
     ):
         command = sys.argv[1]
         expected = {
-            "--track": 4, "--untrack": 3, "--check": 3, "--tracked": 2,
-            "--suggest": 3, "--inspect": 4, "--prepare": 4, "--install": 3,
+            "--track": 4, "--untrack": 3, "--check": 3, "--check-all": 2,
+            "--tracked": 2, "--suggest": 3, "--inspect": 4, "--prepare": 4,
+            "--install": 3,
         }[command]
         if len(sys.argv) != expected:
             print(f"Invalid arguments for {command}; see --help.", file=sys.stderr)
@@ -573,6 +575,8 @@ def _main():
                 suggestions.suggest(sys.argv[2])
             elif command == "--check":
                 tracking.check(sys.argv[2])
+            elif command == "--check-all":
+                tracking.check_all()
             else:
                 tracking.list_tracked()
         except (tracking.TrackingError, tracking.sqlite3.Error, DiscoveryError, OSError) as exc:

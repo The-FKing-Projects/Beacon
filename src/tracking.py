@@ -718,7 +718,22 @@ def untrack(package):
     print("Association removed.")
 
 
-def check(package):
+def check_outcome(status_message):
+    """Map compare_versions text to a --check-all summary label."""
+    if status_message.startswith("Unknown:"):
+        return "unknown"
+    if status_message.startswith("Newer upstream release available."):
+        return "update available"
+    if (status_message.startswith("Versions match.")
+            or status_message.startswith("Upstream versions match.")):
+        return "current"
+    if status_message.startswith("Installed version is newer than the latest upstream release."):
+        return "installed newer"
+    return "unknown"
+
+
+def check_release(package):
+    """Return release-check details for one tracked package; may raise TrackingError."""
     name, architecture, version = installed_package(package)
     with closing(open_database()) as db:
         row = db.execute(
@@ -744,13 +759,80 @@ def check(package):
                     raise TrackingError("Association changed during the release check; try again.")
             finally:
                 release_database_lock(lock)
-    print(f"Package: {name}:{architecture}")
-    print(f"Installed version: {version}")
-    print(f"GitHub repository: https://github.com/{repository}")
-    print(f"Latest stable release: {tag}")
-    print(f"Release URL: {url}")
-    print(f"Status: {compare_versions(version, tag)}")
-    print_deb_assets(assets, name, architecture)
+    status_message = compare_versions(version, tag)
+    return {
+        "name": name,
+        "architecture": architecture,
+        "version": version,
+        "repository": repository,
+        "tag": tag,
+        "url": url,
+        "assets": assets,
+        "status_message": status_message,
+        "outcome": check_outcome(status_message),
+    }
+
+
+def check(package):
+    result = check_release(package)
+    print(f"Package: {result['name']}:{result['architecture']}")
+    print(f"Installed version: {result['version']}")
+    print(f"GitHub repository: https://github.com/{result['repository']}")
+    print(f"Latest stable release: {result['tag']}")
+    print(f"Release URL: {result['url']}")
+    print(f"Status: {result['status_message']}")
+    print_deb_assets(result["assets"], result["name"], result["architecture"])
+
+
+def check_all():
+    """Summarize every tracked package. Read-only: never prepares or installs."""
+    print("Checking all tracked packages (read-only; nothing is prepared or installed).")
+    with closing(open_database()) as db:
+        rows = db.execute(
+            "SELECT package_name, architecture, repository_name FROM tracked_packages "
+            "ORDER BY package_name, architecture"
+        ).fetchall()
+    if not rows:
+        print("No confirmed upstream associations.")
+        return
+    counts = {
+        "current": 0,
+        "update available": 0,
+        "installed newer": 0,
+        "unknown": 0,
+        "error": 0,
+    }
+    for name, architecture, repository in rows:
+        package = f"{name}:{architecture}"
+        print(f"\n{package}")
+        print(f"  Tracked repository: https://github.com/{repository}")
+        try:
+            result = check_release(package)
+        except (TrackingError, OSError, sqlite3.Error) as exc:
+            counts["error"] += 1
+            print("  Result: error")
+            print(f"  Detail: {exc}")
+            continue
+        counts[result["outcome"]] = counts.get(result["outcome"], 0) + 1
+        print(f"  Installed version: {result['version']}")
+        print(f"  Latest stable release: {result['tag']}")
+        print(f"  Result: {result['outcome']}")
+        print(f"  Detail: {result['status_message']}")
+        print("  Assets: run --check for filename suggestions; this command does not select or prepare updates.")
+    print(
+        "\nSummary: "
+        f"{counts['current']} current, "
+        f"{counts['update available']} update available, "
+        f"{counts['installed newer']} installed newer, "
+        f"{counts['unknown']} unknown, "
+        f"{counts['error']} error"
+    )
+    print("No packages were prepared or installed.")
+    if counts["error"]:
+        raise TrackingError(
+            f"{counts['error']} tracked package(s) could not be checked; "
+            "see per-package errors above."
+        )
 
 
 def list_tracked():
