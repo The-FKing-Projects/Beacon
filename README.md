@@ -191,18 +191,21 @@ check does not verify asset contents, compatibility, package identity, or integr
 Network errors, interrupted API responses, rate limits, unavailable releases,
 and changed repository identities are reported without replacing saved
 associations. Failed requests are not retried automatically; retry the command
-after connectivity recovers or the rate limit clears. Version comparison is limited to three-component
-numeric versions with an optional `v` prefix. Installed versions may also have
-a numeric Debian revision: `0.8.1-1` versus `v0.8.2` reports a newer upstream
-release. These checks explicitly compare only the upstream version, not the
-Debian revision or a release asset's package version; equal upstream versions
-do not establish that the packages are identical or equally current. Epochs,
-distro-specific revisions such as `-1ubuntu1` or `+ds`, build-suffixed installed
-versions, prereleases, and other tag formats are reported as unknown. Use
-`--inspect` for the selected asset's full Debian version comparison.
-Operator-reported desktop examples and comparison rules are recorded in the
-[discovery cases](docs/research/discovery-test-cases.md#kubuntu-2604-beacon-v112-operator-reported-summary)
-(undated summary, not a dated qualification transcript).
+after connectivity recovers or the rate limit clears. `--check` version
+comparison is intentionally narrow: three-component numeric tags with an
+optional `v`, and installed versions that are either the same shape or that
+shape plus a purely numeric Debian revision (`0.8.1-1` versus `v0.8.2`).
+Anything else — epochs, `+ds`, `-1ubuntu1`, build suffixes such as
+`3.7.1-build.50`, tags like `release-3.4.13-linux1`, prereleases, and other
+non-`X.Y.Z` forms — prints
+`Unknown: versions cannot be compared safely.` That unknown result is
+expected, not a failure to retry blindly. Equal upstream triples from
+`--check` do not prove packages are identical; use `--inspect` for the
+selected asset's full Debian version comparison. The full rule table and
+Kubuntu examples live in
+[version comparison](docs/design/version-comparison.md); the undated
+operator-reported desktop summary is in the
+[discovery cases](docs/research/discovery-test-cases.md#kubuntu-2604-beacon-v112-operator-reported-summary).
 
 `--inspect` downloads the exact named asset from the tracked repository's
 latest stable release into a temporary directory, compares its package name,
@@ -379,11 +382,12 @@ not claims of new product scope.
    similarity remain hints, not proof of provenance.
 3. **Reliable update comparisons.** **Partial.** Release-tag comparison
    supports three-component numeric versions with an optional `v` prefix and a
-   numeric Debian revision on the installed side. Epochs, distro-specific
-   revisions such as `-1ubuntu1`, prereleases, and other tag formats remain
-   explicitly unknown. Installation decisions use the selected asset's full
-   Debian version. Add further tag mappings only where interpretation is
-   unambiguous and backed by regression cases.
+   numeric Debian revision on the installed side; other forms stay unknown.
+   Operator rules are documented in
+   [version comparison](docs/design/version-comparison.md). Installation
+   decisions use the selected asset's full Debian version. Add further tag
+   mappings only where interpretation is unambiguous and backed by regression
+   cases.
 4. **Preserved installation safety.** **Shipped** for the declared support
    matrix. Reviewed preparation and installation are exercised with local
    fixtures in the isolated APT suite; source confirmation, exact asset

@@ -307,25 +307,13 @@ These desktop installs are distinct from CI and from temporary-state lab
 cases. They still do not authorize unattended installation, non-GitHub
 providers, or treating digests as authenticity proofs.
 
-### Release-tag version comparison rules (operator summary)
+### Version comparison pointer
 
-`--check` compares the installed package version to the latest stable release
-**tag**, not to the selected asset's Debian version:
-
-| Supported today | Remains unknown |
-| --- | --- |
-| Three-component numeric tags with optional `v` (example `v1.2.3`) | Epochs (example `3:…`) |
-| Installed numeric Debian revision only (example `1.2.3-1` vs `v1.2.4` compares upstream `1.2.3` to `1.2.4` and states the revision is not compared) | Distro or vendor suffixes (`-1ubuntu1`, `+ds`, build tags such as `3.7.1-build.50`) |
-| | Prereleases, non-numeric tags, or tags that are not exactly three numeric components |
-
-Equal upstream versions from `--check` do **not** mean the packages are
-identical. `--inspect` and `--prepare` both use the asset's full Debian
-version for direction and require an exact package-name match, but their
-architecture gates differ: `--inspect` accepts an asset architecture equal to
-the installed architecture **or** `all`; `--prepare` requires the asset
-architecture to equal the installed architecture exactly and therefore blocks
-an `all` asset when the installation is architecture-specific. Expanding the
-supported tag set is backlog work and needs unambiguous mappings plus offline
+Canonical operator rules for when `--check` compares versus when it prints
+unknown — including Kubuntu `github-desktop` / `spdx-licenses` examples and
+the `--inspect` vs `--prepare` architecture difference — are in
+[version comparison](../design/version-comparison.md). Expanding the
+supported tag set remains backlog and needs unambiguous mappings plus offline
 regressions before any code change.
 
 ## Supporting lab observations (2026-11-14)
@@ -371,7 +359,7 @@ because they appear in this list:
 | Broader release-tag version comparison | `github-desktop`, `spdx-licenses`, epoch/`+ds`/`ubuntu` unknowns | Add formats only with unambiguous rules and offline regressions; keep unsupported tags unknown |
 | Optional `--check-all` | Multiple tracked packages on one host | Must preserve per-association errors and never auto-prepare or auto-install |
 | Slightly more flexible filename matching, or mark likely after successful inspect | Moonfin title-case / Feishin channel-style names | Exact asset selection and identity checks remain mandatory; do not treat filename hints as provenance |
-| Document version-comparison rules more prominently for operators | Operators need to know when `--check` says unknown vs when `--inspect` decides direction | Documentation clarity only unless a rule is wrong |
+| Document version-comparison rules more prominently for operators | Operators need to know when `--check` says unknown vs when `--inspect` decides direction | **Done** for current behavior in [version comparison](../design/version-comparison.md); broader formats still backlog |
 | Homepage URL normalization (strip fragments such as `#readme`) | Caprine direct-homepage tier missed | Tiny, test-backed change if pursued; still no auto-confirm |
 | Non-GitHub vendor download providers | `discord-ptb` correct negative; Steam-style vendor homepages | Evaluation/design until source identity, redirects, and verification are defined |
 
