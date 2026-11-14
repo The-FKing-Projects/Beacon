@@ -356,6 +356,23 @@ def _valid_release_asset_url(url, repository, tag, asset):
         return False
 
 
+def _valid_release_page_url(url, repository, tag):
+    try:
+        parsed = urlparse(url)
+        prefix = f"/{repository}/releases/tag/"
+        path = unquote(parsed.path)
+        return (
+            parsed.scheme == "https"
+            and parsed.netloc.lower() == "github.com"
+            and not parsed.username and not parsed.password
+            and not parsed.query and not parsed.fragment and not parsed.params
+            and path[:len(prefix)].lower() == prefix.lower()
+            and path[len(prefix):] == tag
+        )
+    except ValueError:
+        return False
+
+
 def github_get(path):
     request = Request(
         "https://api.github.com" + path,
@@ -407,8 +424,7 @@ def latest_release(name):
     url = data.get("html_url")
     if not isinstance(tag, str) or not tag or not isinstance(url, str):
         raise TrackingError("GitHub returned an invalid release.")
-    parsed = urlparse(url)
-    if parsed.scheme != "https" or parsed.netloc.lower() != "github.com":
+    if not _valid_release_page_url(url, name, tag):
         raise TrackingError("GitHub returned an invalid release URL.")
     assets = data.get("assets")
     if not isinstance(assets, list):

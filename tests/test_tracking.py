@@ -647,6 +647,31 @@ class TrackingTest(unittest.TestCase):
             _, _, assets = tracking.latest_release("owner/repo")
             self.assertEqual(len(assets), 1)
 
+    def test_release_page_url_matches_repository_and_tag(self):
+        release = {
+            "tag_name": "v1",
+            "html_url": "https://github.com/owner/repo/releases/tag/v1",
+            "assets": [],
+        }
+        for url in (
+            "https://github.com/other/repo/releases/tag/v1",
+            "https://github.com/owner/repo/releases/tag/v2",
+            "https://github.com/owner/repo/releases/tag/v1?redirect=1",
+            "http://github.com/owner/repo/releases/tag/v1",
+        ):
+            with self.subTest(url=url), \
+                 patch("tracking.github_get", return_value={**release, "html_url": url}):
+                with self.assertRaisesRegex(tracking.TrackingError, "invalid release URL"):
+                    tracking.latest_release("owner/repo")
+
+        encoded_tag = {
+            "tag_name": "release/v1",
+            "html_url": "https://github.com/owner/repo/releases/tag/release%2Fv1",
+            "assets": [],
+        }
+        with patch("tracking.github_get", return_value=encoded_tag):
+            self.assertEqual(tracking.latest_release("owner/repo")[0], "release/v1")
+
 
 if __name__ == "__main__":
     unittest.main()
