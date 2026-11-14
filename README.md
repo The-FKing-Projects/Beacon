@@ -13,12 +13,12 @@ release assets. Direct vendor download URLs and other release providers are
 not yet supported.
 
 The initial focus is Debian and Ubuntu. Beacon
-[v1.0.0](https://github.com/The-FKing-Projects/Beacon/releases/tag/v1.0.0)
-is the first stable CLI updater release, available as a GitHub Release Debian
+[v1.1.0](https://github.com/The-FKing-Projects/Beacon/releases/tag/v1.1.0)
+is the latest stable CLI updater release, available as a GitHub Release Debian
 package and through the project's signed APT repository. Discovery, source
 classification, GitHub upstream suggestions, manually confirmed release
-tracking, retained update preparation, and an explicitly approved APT handoff
-are implemented.
+tracking, retained update preparation, GitHub asset digest verification, and
+an explicitly approved APT handoff are implemented.
 The updater path has passed isolated real-transaction tests and package
 qualification across the declared support matrix.
 
@@ -88,11 +88,11 @@ this source.
 
 Download the `.deb` from the
 [latest stable release](https://github.com/The-FKing-Projects/Beacon/releases/latest).
-For v1.0.0, the file is `beacon_1.0.0-1_all.deb`. Open a terminal in the
+For v1.1.0, the file is `beacon_1.1.0-1_all.deb`. Open a terminal in the
 directory containing the downloaded file and run:
 
 ```bash
-sudo apt install ./beacon_1.0.0-1_all.deb
+sudo apt install ./beacon_1.1.0-1_all.deb
 beacon --version
 ```
 
