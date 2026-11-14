@@ -199,6 +199,9 @@ archive is a package named `fd`, not `fd-find`. A newer version and a valid
 upstream association must not turn it into an update for `fd-find`.
 Filename matching left this asset unverified, while the `bat` filename was
 only a likely candidate, not an approved update.
+The live `bat` release also lists `bat-musl` assets; filename regressions keep
+those unverified for the regular `bat` package even when the architecture
+suffix matches.
 
 Offline regression coverage uses these observed versions, names, homepage
 and repository identities. It also explicitly **simulates installed

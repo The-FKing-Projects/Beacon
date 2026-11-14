@@ -584,6 +584,8 @@ class TrackingTest(unittest.TestCase):
             ("bat_0.26.1_amd64.deb", "bat", "amd64", "Likely candidate"),
             ("bat_0.26.1_arm64.deb", "bat", "arm64", "Likely candidate"),
             ("bat_0.26.1_arm64.deb", "bat", "amd64", "Not suggested"),
+            ("bat-musl_0.26.1_arm64.deb", "bat", "arm64", "Unverified"),
+            ("bat-musl_0.26.1_musl-linux-amd64.deb", "bat", "amd64", "Unverified"),
             ("fd_10.5.2_amd64.deb", "fd-find", "amd64", "Unverified"),
             ("clovereye_0.1.0_amd64.deb", "clover-eye", "amd64", "Likely candidate"),
             ("clover-eye-1.2.3-x86_64.deb", "clover-eye", "amd64", "Likely candidate"),
