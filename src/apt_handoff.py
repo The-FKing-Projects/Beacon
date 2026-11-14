@@ -387,7 +387,7 @@ def _validate_manifest(manifest):
     return manifest
 
 
-def _hash_file(path, expected=None, require_root_private=False):
+def _hash_file(path, expected=None, require_root_readonly=False):
     digest = hashlib.sha256()
     size = 0
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
@@ -399,12 +399,11 @@ def _hash_file(path, expected=None, require_root_private=False):
         details = os.fstat(descriptor)
         if not stat.S_ISREG(details.st_mode):
             raise tracking.TrackingError("Pinned package artifact is not a regular file.")
-        if require_root_private and (
+        if require_root_readonly and (
             details.st_uid != 0
-            or stat.S_IMODE(details.st_mode) & 0o077
             or stat.S_IMODE(details.st_mode) & 0o222
         ):
-            raise tracking.TrackingError("Pinned package artifact is not root-owned and immutable to users.")
+            raise tracking.TrackingError("Pinned package artifact is not root-owned and read-only.")
         while True:
             chunk = os.read(descriptor, 1024 * 1024)
             if not chunk:
@@ -520,7 +519,7 @@ def validate_hook_protocol(data, manifest):
                 raise tracking.TrackingError("APT selected a different package identity.")
             if new_version != manifest["version"]:
                 raise tracking.TrackingError("APT selected a different package version.")
-            _hash_file(action, manifest["sha256"], require_root_private=True)
+            _hash_file(action, manifest["sha256"], require_root_readonly=True)
             if _metadata(action) != [
                 manifest["package"], manifest["architecture"], manifest["version"],
             ]:
@@ -541,14 +540,19 @@ def validate_hook_protocol(data, manifest):
 
 def _secure_directory(path):
     try:
-        path.mkdir(mode=0o700, parents=True, exist_ok=True)
+        path.mkdir(mode=0o711, parents=True, exist_ok=True)
         details = path.lstat()
     except OSError as exc:
-        raise tracking.TrackingError(f"Unable to create private APT staging area: {exc}") from exc
-    if (not stat.S_ISDIR(details.st_mode) or details.st_uid != 0
-            or stat.S_IMODE(details.st_mode) & 0o700 != 0o700
-            or stat.S_IMODE(details.st_mode) & 0o077):
-        raise tracking.TrackingError("APT staging directory is not private and root-owned.")
+        raise tracking.TrackingError(f"Unable to create root-owned APT staging area: {exc}") from exc
+    if not stat.S_ISDIR(details.st_mode) or details.st_uid != 0:
+        raise tracking.TrackingError("APT staging directory is not root-owned.")
+    try:
+        os.chmod(path, 0o711)
+        details = path.lstat()
+    except OSError as exc:
+        raise tracking.TrackingError(f"Unable to secure APT staging area: {exc}") from exc
+    if stat.S_IMODE(details.st_mode) != 0o711:
+        raise tracking.TrackingError("APT staging directory does not have the required permissions.")
 
 
 def _acquire_staging_lock():
@@ -581,7 +585,7 @@ def _clean_stale_transactions():
         except OSError as exc:
             raise tracking.TrackingError(f"Unable to inspect stale APT staging data: {exc}") from exc
         if (not stat.S_ISDIR(details.st_mode) or details.st_uid != 0
-                or stat.S_IMODE(details.st_mode) & 0o077):
+                or stat.S_IMODE(details.st_mode) & 0o022):
             raise tracking.TrackingError(
                 f"Refusing to remove unrecognized APT staging data at {path}."
             )
@@ -601,13 +605,14 @@ def _copy_pinned_artifact(source, destination, expected_digest):
     except OSError as exc:
         raise tracking.TrackingError(f"Unable to read prepared package artifact: {exc}") from exc
     try:
-        target_fd = os.open(destination, target_flags, 0o400)
+        target_fd = os.open(destination, target_flags, 0o444)
     except OSError as exc:
         os.close(source_fd)
         raise tracking.TrackingError(f"Unable to stage pinned package artifact: {exc}") from exc
     digest = hashlib.sha256()
     size = 0
     try:
+        os.fchmod(target_fd, 0o444)
         source_details = os.fstat(source_fd)
         if not stat.S_ISREG(source_details.st_mode):
             raise tracking.TrackingError("Prepared artifact is not a regular file.")
@@ -631,16 +636,17 @@ def _copy_pinned_artifact(source, destination, expected_digest):
         raise tracking.TrackingError("Prepared artifact changed; refusing APT handoff.")
 
 
-def _write_private_file(path, content, mode=0o400):
+def _write_staged_file(path, content, mode=0o400):
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
     try:
         descriptor = os.open(path, flags, mode)
         with os.fdopen(descriptor, "w", encoding="utf-8") as output:
+            os.fchmod(output.fileno(), mode)
             output.write(content)
             output.flush()
             os.fsync(output.fileno())
     except OSError as exc:
-        raise tracking.TrackingError(f"Unable to write private APT handoff data: {exc}") from exc
+        raise tracking.TrackingError(f"Unable to write APT handoff data: {exc}") from exc
 
 
 def _installed_version(package, architecture):
@@ -703,7 +709,7 @@ def privileged_install(source, manifest):
             raise tracking.TrackingError("Installed package state changed after review.")
 
         transaction = Path(tempfile.mkdtemp(prefix="transaction-", dir=STAGING_ROOT))
-        os.chmod(transaction, 0o700)
+        os.chmod(transaction, 0o711)
         staged = transaction / "selected.deb"
         _copy_pinned_artifact(source, staged, manifest["sha256"])
         staged_manifest = dict(manifest, artifact=str(staged))
@@ -712,9 +718,10 @@ def privileged_install(source, manifest):
         ]:
             raise tracking.TrackingError("Staged package metadata changed.")
         manifest_path = transaction / "manifest.json"
-        _write_private_file(
+        _write_staged_file(
             manifest_path,
             json.dumps(staged_manifest, sort_keys=True, separators=(",", ":")),
+            0o444,
         )
         hook_path = transaction / "apt-hook"
         hook_code = (
@@ -724,8 +731,7 @@ def privileged_install(source, manifest):
             "from apt_handoff import hook_main\n"
             f"raise SystemExit(hook_main({str(manifest_path)!r}))\n"
         )
-        _write_private_file(hook_path, hook_code, 0o500)
-        os.chmod(hook_path, 0o500)
+        _write_staged_file(hook_path, hook_code, 0o555)
         command = str(hook_path)
         result = subprocess.run(
             [
@@ -757,7 +763,7 @@ def privileged_install(source, manifest):
                 shutil.rmtree(transaction)
         except OSError as exc:
             raise tracking.TrackingError(
-                f"Unable to remove private APT staging data at {transaction}: {exc}"
+                f"Unable to remove APT staging data at {transaction}: {exc}"
             ) from exc
         finally:
             fcntl.flock(lock, fcntl.LOCK_UN)
@@ -769,8 +775,9 @@ def hook_main(manifest_path):
         path = Path(manifest_path)
         details = path.lstat()
         if (not stat.S_ISREG(details.st_mode) or details.st_uid != 0
-                or stat.S_IMODE(details.st_mode) & 0o077 or details.st_size > MAX_PLAN_SIZE):
-            raise tracking.TrackingError("APT handoff manifest is not private and root-owned.")
+                or not (stat.S_IMODE(details.st_mode) & 0o444)
+                or stat.S_IMODE(details.st_mode) & 0o222 or details.st_size > MAX_PLAN_SIZE):
+            raise tracking.TrackingError("APT handoff manifest is not root-owned and read-only.")
         manifest = json.loads(path.read_text(encoding="utf-8"))
         protocol = sys.stdin.read(MAX_PROTOCOL_SIZE + 1)
         if len(protocol) > MAX_PROTOCOL_SIZE:

@@ -205,6 +205,22 @@ class AptHookExperiments(unittest.TestCase):
             f"sys.path.insert(0, {str(source_root)!r})\n"
             "import apt_handoff\n"
             f"apt_handoff.STAGING_ROOT = Path({str(self.base / 'run/beacon')!r})\n"
+            "original_run = apt_handoff.subprocess.run\n"
+            "def checked_run(command, *args, **kwargs):\n"
+            "    if command and command[0] == apt_handoff.APT_BINARY:\n"
+            "        transaction = next(apt_handoff.STAGING_ROOT.glob('transaction-*'))\n"
+            "        expected_modes = {\n"
+            "            apt_handoff.STAGING_ROOT: 0o711,\n"
+            "            transaction: 0o711,\n"
+            "            transaction / 'selected.deb': 0o444,\n"
+            "            transaction / 'manifest.json': 0o444,\n"
+            "            transaction / 'apt-hook': 0o555,\n"
+            "        }\n"
+            "        for path, expected in expected_modes.items():\n"
+            "            if path.stat().st_mode & 0o777 != expected:\n"
+            "                raise AssertionError(f'Unexpected staging mode for {path}')\n"
+            "    return original_run(command, *args, **kwargs)\n"
+            "apt_handoff.subprocess.run = checked_run\n"
             f"apt_handoff.privileged_install({str(archive)!r}, "
             f"json.loads({json.dumps(manifest)!r}))\n"
         )
@@ -272,8 +288,8 @@ class AptHookExperiments(unittest.TestCase):
     def test_production_privileged_helper_performs_isolated_upgrade(self):
         archive = self.build_upgrade_archive()
         staging = self.base / "run/beacon"
-        staging.mkdir(parents=True, mode=0o700)
-        staging.chmod(0o700)
+        staging.mkdir(parents=True, mode=0o711)
+        staging.chmod(0o711)
         stale = staging / "transaction-interrupted"
         stale.mkdir(mode=0o700)
         (stale / "selected.deb").write_bytes(b"interrupted fixture")
