@@ -28,6 +28,13 @@ against a malicious administrator or promise universal rollback.
   The manifest and the asset can both be replaced by an attacker with access
   to the release. Report absent, malformed, ambiguous, and mismatched entries
   distinctly; do not describe an unsigned match as a verified publisher.
+- When GitHub supplies an asset's API `sha256` digest, compare downloaded
+  bytes against it and retain/revalidate that value through preparation and
+  installation. If an exact `SHA256SUMS` entry also exists, require both
+  digests to match the asset and each other. A missing digest remains
+  supported, but a malformed non-null digest or mismatch blocks use. GitHub's
+  upload-time digest is integrity evidence, not independent publisher
+  authentication.
 - A future stronger authenticity check needs an independently trusted key or
   digest and a documented verification method. Key discovery, trust,
   rotation, and revocation remain open product decisions; do not assume all
@@ -48,14 +55,14 @@ against a malicious administrator or promise universal rollback.
 ## Handoff policy
 
 1. `--prepare` downloads only the exact user-selected release asset. It
-   verifies package name, exact architecture, version direction, and any
-   exact `SHA256SUMS` entry; a mismatched checksum blocks preparation. Missing
-   or matching-but-unauthenticated checksum evidence is displayed explicitly.
-   The artifact and its source/release identity, digest, metadata, and prior
-   installed version are retained in private user storage.
+   verifies package name, exact architecture, version direction, any exact
+   `SHA256SUMS` entry, and any GitHub API asset digest; a mismatch blocks
+   preparation. Missing or matching-but-unauthenticated evidence is displayed
+   explicitly. The artifact and its source/release identity, digests,
+   metadata, and prior installed version are retained in private user storage.
 2. `--install` revalidates the confirmed repository ID/name, selected release
-   and asset URL, checksum evidence, artifact digest and package metadata,
-   APT ownership, and installed package state. A package is considered
+   and asset URL, checksum evidence, API digest, artifact digest and package
+   metadata, APT ownership, and installed package state. A package is considered
    APT-managed if any version in its policy table comes from a configured
    repository, even when a newer locally installed version is APT's current
    candidate. Beacon does not take over a package just because its repository

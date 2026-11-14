@@ -149,7 +149,18 @@ def _assets_from_release(repository, tag, filename, data):
             raise tracking.TrackingError("Asset URL does not match the confirmed repository and release.")
         return url
 
-    return tag, asset_url(chosen[0]), asset_url(checksum_files[0]) if checksum_files else None
+    api_digest = chosen[0].get("digest")
+    if api_digest is not None:
+        if not isinstance(api_digest, str) or not re.fullmatch(
+            r"sha256:[0-9a-fA-F]{64}", api_digest,
+        ):
+            raise tracking.TrackingError("GitHub returned an invalid SHA-256 asset digest.")
+        api_digest = api_digest[7:].lower()
+    return (
+        tag, asset_url(chosen[0]),
+        asset_url(checksum_files[0]) if checksum_files else None,
+        api_digest,
+    )
 
 
 def expected_checksum(path, filename):
@@ -229,24 +240,41 @@ def inspect(package, filename):
     repository, identifier = tracking.resolve_repository(row[0])
     if identifier != row[1]:
         raise tracking.TrackingError("GitHub repository identity changed; confirm the upstream again before inspection.")
-    tag, url, checksum_url = selected_assets(repository, filename)
+    tag, url, checksum_url, api_digest = selected_assets(repository, filename)
     print(f"Inspecting {filename} from {repository} release {tag}.")
     with tempfile.TemporaryDirectory(prefix="beacon-inspect-") as directory:
         deb = Path(directory) / "asset.deb"
         digest = download(url, deb, MAX_DEB_SIZE)
         print(f"SHA256: {digest}")
+        expected = None
         if checksum_url:
             checksum_path = Path(directory) / "SHA256SUMS"
             download(checksum_url, checksum_path, MAX_CHECKSUM_SIZE)
             expected = expected_checksum(checksum_path, filename)
-            if expected is None:
-                print("Checksum: SHA256SUMS has no entry for this asset; integrity not verified.")
-            elif digest != expected:
+            if expected is not None and digest != expected:
                 raise tracking.TrackingError("SHA256 checksum mismatch; do not use this asset.")
-            else:
-                print("Checksum: matches release SHA256SUMS (not authenticated).")
+            checksum_evidence = (
+                "matches release SHA256SUMS (not authenticated)"
+                if expected is not None
+                else "SHA256SUMS has no entry for this asset"
+            )
         else:
-            print("Checksum: no SHA256SUMS asset available; integrity not verified.")
+            checksum_evidence = "no SHA256SUMS asset available"
+        if api_digest is not None and digest != api_digest:
+            raise tracking.TrackingError(
+                "GitHub API SHA-256 digest mismatch; do not use this asset."
+            )
+        if expected is None and api_digest is None:
+            print(f"Checksum: {checksum_evidence}; integrity not verified.")
+        else:
+            print(f"Checksum: {checksum_evidence}.")
+        if api_digest is None:
+            print("GitHub API SHA-256 digest: unavailable.")
+        else:
+            print(
+                "GitHub API SHA-256 digest: matches GitHub's upload-time digest "
+                "(not publisher authentication)."
+            )
         asset_name, asset_arch, asset_version = inspect_fields(deb)
         print(f"Installed package: {name}:{architecture} {installed_version}")
         print(f"Asset package: {asset_name}:{asset_arch} {asset_version}")
@@ -257,5 +285,8 @@ def inspect(package, filename):
         relation = version_relation(installed_version, asset_version)
         print(f"Debian version comparison: asset is {relation} than installed." if relation != "same"
               else "Debian version comparison: asset and installed versions are the same.")
-        print("Metadata and checksum do not prove authenticity or dependency compatibility.")
+        print(
+            "Metadata and available checksums/digests do not prove publisher "
+            "authenticity or dependency compatibility."
+        )
     print("No package was installed; the temporary download was removed.")

@@ -21,7 +21,7 @@ PREPARED_COLUMNS = (
     "package_name, architecture, repository_id, repository_name, release_tag, asset_name, "
     "asset_url, checksum_asset_url, expected_sha256, sha256, checksum_status, "
     "asset_package_name, asset_architecture, asset_version, installed_version, artifact_path, "
-    "prepared_at"
+    "prepared_at, github_api_sha256"
 )
 
 
@@ -161,6 +161,13 @@ def _checksum_evidence(status):
     }[status]
 
 
+def _api_digest_evidence(api_digest):
+    return (
+        "matches GitHub's upload-time digest (not publisher authentication)"
+        if api_digest is not None else "unavailable"
+    )
+
+
 def prepare(package, filename):
     directory = _updates_directory()
     lock = _update_lock(directory)
@@ -170,7 +177,7 @@ def prepare(package, filename):
         repository, identifier = _association(name, installed_architecture)
         repository = _resolve_tracked_repository(repository, identifier)
         apt_handoff.assert_not_managed_by_apt(name, installed_architecture)
-        tag, asset_url, checksum_url = inspection.selected_assets(repository, filename)
+        tag, asset_url, checksum_url, api_digest = inspection.selected_assets(repository, filename)
         print(f"Preparing {name}:{installed_architecture} from {repository} release {tag}.")
         print(f"Selected asset: {filename}")
         temporary = directory / f".partial-{secrets.token_hex(16)}"
@@ -180,6 +187,10 @@ def prepare(package, filename):
         try:
             digest = inspection.download(asset_url, temporary, inspection.MAX_DEB_SIZE)
             temporary.chmod(0o600)
+            if api_digest is not None and digest != api_digest:
+                raise tracking.TrackingError(
+                    "GitHub API SHA-256 digest mismatch; the selected asset cannot be prepared."
+                )
             expected = None
             checksum_status = "asset-missing"
             if checksum_url:
@@ -228,7 +239,7 @@ def prepare(package, filename):
                 with db:
                     db.execute(
                         f"""INSERT INTO prepared_updates ({PREPARED_COLUMNS})
-                        VALUES ({",".join("?" for _ in range(17))})
+                        VALUES ({",".join("?" for _ in range(18))})
                         ON CONFLICT(package_name, architecture) DO UPDATE SET
                             repository_id=excluded.repository_id,
                             repository_name=excluded.repository_name,
@@ -244,13 +255,15 @@ def prepare(package, filename):
                             asset_version=excluded.asset_version,
                             installed_version=excluded.installed_version,
                             artifact_path=excluded.artifact_path,
-                            prepared_at=excluded.prepared_at""",
+                            prepared_at=excluded.prepared_at,
+                            github_api_sha256=excluded.github_api_sha256""",
                         (
                             name, installed_architecture, identifier, repository, tag,
                             filename, asset_url, checksum_url, expected, digest,
                             checksum_status, asset_package, asset_architecture, asset_version,
                             installed_version, str(final_artifact),
                             datetime.now(timezone.utc).isoformat(),
+                            api_digest,
                         ),
                     )
             stored = True
@@ -265,6 +278,7 @@ def prepare(package, filename):
             checksum_temporary.unlink(missing_ok=True)
         print(f"SHA256: {digest}")
         print(f"Checksum evidence: {_checksum_evidence(checksum_status)}.")
+        print(f"GitHub API SHA-256 digest evidence: {_api_digest_evidence(api_digest)}.")
         print("Publisher authenticity is not independently verified.")
         print(f"Asset package: {asset_package}:{asset_architecture} {asset_version}")
         print(f"Installed package: {name}:{installed_architecture} {installed_version}")
@@ -278,13 +292,13 @@ def _verify_prepared_release(row, directory):
     (
         name, installed_architecture, identifier, repository, tag, asset_name, asset_url,
         checksum_url, expected, digest, checksum_status, asset_package, asset_architecture,
-        asset_version, installed_version, artifact_path, _,
+        asset_version, installed_version, artifact_path, _, api_digest,
     ) = row
     resolved = _resolve_tracked_repository(repository, identifier)
     apt_handoff.assert_not_managed_by_apt(name, installed_architecture)
-    current_tag, current_url, current_checksum_url = inspection.selected_release_assets(
-        resolved, tag, asset_name,
-    )
+    (
+        current_tag, current_url, current_checksum_url, current_api_digest,
+    ) = inspection.selected_release_assets(resolved, tag, asset_name)
     if current_tag != tag or current_url != asset_url or current_checksum_url != checksum_url:
         raise tracking.TrackingError(
             "The prepared release asset identity changed; prepare the update again."
@@ -293,6 +307,14 @@ def _verify_prepared_release(row, directory):
         artifact_path, name, installed_architecture, directory,
     )
     actual_digest = apt_handoff._hash_file(artifact, digest)
+    if api_digest is not None and current_api_digest != api_digest:
+        raise tracking.TrackingError(
+            "The GitHub API asset digest changed; prepare the update again."
+        )
+    if current_api_digest is not None and current_api_digest != actual_digest:
+        raise tracking.TrackingError(
+            "The GitHub API digest does not match the prepared artifact."
+        )
     metadata = inspection.inspect_fields(artifact)
     if metadata != [asset_package, asset_architecture, asset_version]:
         raise tracking.TrackingError("Prepared package metadata changed; prepare it again.")
@@ -310,7 +332,7 @@ def _verify_prepared_release(row, directory):
         raise tracking.TrackingError(
             "Release checksum evidence changed; prepare the update again."
         )
-    return artifact
+    return artifact, current_api_digest
 
 
 def _sudo_install(artifact, digest, payload):
@@ -361,7 +383,7 @@ def install(package):
         (
             saved_name, saved_architecture, repository_id, repository, tag, asset_name, asset_url,
             checksum_url, expected, digest, checksum_status, asset_package, asset_architecture,
-            asset_version, prepared_from_version, artifact_path, _,
+            asset_version, prepared_from_version, artifact_path, _, _,
         ) = row
         tracked_repository, tracked_id = _association(saved_name, saved_architecture)
         if (tracked_repository != repository or tracked_id != repository_id
@@ -373,7 +395,7 @@ def install(package):
             raise tracking.TrackingError(
                 "Installed package state changed since preparation; prepare the update again."
             )
-        artifact = _verify_prepared_release(row, directory)
+        artifact, current_api_digest = _verify_prepared_release(row, directory)
         relation = inspection.version_relation(installed_version, asset_version)
         if relation == "older":
             raise tracking.TrackingError("Downgrades are blocked.")
@@ -385,6 +407,10 @@ def install(package):
         print(f"Asset URL: {asset_url}")
         print(f"SHA256: {digest}")
         print(f"Checksum evidence: {_checksum_evidence(checksum_status)}.")
+        print(
+            "GitHub API SHA-256 digest evidence: "
+            f"{_api_digest_evidence(current_api_digest)}."
+        )
         print("Publisher authenticity is not independently verified.")
         print(f"Version change: {installed_version} -> {asset_version} ({relation})")
         print("APT transaction:")

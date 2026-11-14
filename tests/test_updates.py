@@ -44,8 +44,12 @@ class UpdatesTest(unittest.TestCase):
         self.asset_bytes = b"pinned Debian archive fixture"
         self.digest = hashlib.sha256(self.asset_bytes).hexdigest()
 
-    def common_prepare_patches(self, *, bad_checksum=False, relation="newer"):
+    def common_prepare_patches(
+        self, *, bad_checksum=False, relation="newer", api_digest=None,
+        include_checksum=True,
+    ):
         checksum = ("0" * 64 if bad_checksum else self.digest)
+        checksum_url = self.checksum_url if include_checksum else None
 
         def fake_download(url, destination, _limit):
             if url.endswith("SHA256SUMS"):
@@ -62,15 +66,15 @@ class UpdatesTest(unittest.TestCase):
                 "evidence": "no configured APT repository versions were found",
             }),
             patch("inspection.selected_assets", return_value=(
-                "v2.0", self.asset_url, self.checksum_url,
+                "v2.0", self.asset_url, checksum_url, api_digest,
             )),
             patch("inspection.download", side_effect=fake_download),
             patch("inspection.inspect_fields", return_value=["app", "amd64", "2.0"]),
             patch("inspection.version_relation", return_value=relation),
         )
 
-    def prepare_fixture(self):
-        patches = self.common_prepare_patches()
+    def prepare_fixture(self, *, api_digest=None):
+        patches = self.common_prepare_patches(api_digest=api_digest)
         with contextlib.ExitStack() as stack:
             for item in patches:
                 stack.enter_context(item)
@@ -99,8 +103,49 @@ class UpdatesTest(unittest.TestCase):
         self.assertEqual(artifact.stat().st_mode & 0o777, 0o600)
         self.assertIn("Publisher authenticity is not independently verified.", output.getvalue())
 
+    def test_prepare_persists_and_reports_github_api_digest(self):
+        patches = self.common_prepare_patches(api_digest=self.digest)
+        output = io.StringIO()
+        with contextlib.ExitStack() as stack:
+            for item in patches:
+                stack.enter_context(item)
+            with contextlib.redirect_stdout(output):
+                updates.prepare("app", self.filename)
+        row = updates._prepared_row("app", "amd64")
+        self.assertEqual(row[17], self.digest)
+        self.assertIn(
+            "GitHub API SHA-256 digest evidence: matches GitHub's upload-time digest",
+            output.getvalue(),
+        )
+
+    def test_prepare_accepts_github_api_digest_without_sha256s(self):
+        patches = self.common_prepare_patches(
+            api_digest=self.digest, include_checksum=False,
+        )
+        with contextlib.ExitStack() as stack:
+            for item in patches:
+                stack.enter_context(item)
+            with contextlib.redirect_stdout(io.StringIO()):
+                updates.prepare("app", self.filename)
+        row = updates._prepared_row("app", "amd64")
+        self.assertIsNone(row[7])
+        self.assertEqual(row[10], "asset-missing")
+        self.assertEqual(row[17], self.digest)
+
+    def test_prepare_rejects_github_api_digest_mismatch(self):
+        patches = self.common_prepare_patches(api_digest="0" * 64)
+        with contextlib.ExitStack() as stack:
+            for item in patches:
+                stack.enter_context(item)
+            with self.assertRaisesRegex(tracking.TrackingError, "GitHub API SHA-256 digest mismatch"):
+                updates.prepare("app", self.filename)
+        self.assertIsNone(updates._prepared_row("app", "amd64"))
+        self.assertEqual(list(updates._updates_directory().glob(".partial-*")), [])
+
     def test_prepare_rejects_bad_checksum_without_saving_or_leaking_partial_files(self):
-        patches = self.common_prepare_patches(bad_checksum=True)
+        patches = self.common_prepare_patches(
+            bad_checksum=True, api_digest=self.digest,
+        )
         with contextlib.ExitStack() as stack:
             for item in patches:
                 stack.enter_context(item)
@@ -203,6 +248,7 @@ class UpdatesTest(unittest.TestCase):
                 "v10.5.2",
                 "https://github.com/sharkdp/fd/releases/download/v10.5.2/fd_10.5.2_amd64.deb",
                 None,
+                None,
             )))
             stack.enter_context(patch(
                 "inspection.inspect_fields", return_value=["fd", "amd64", "10.5.2"],
@@ -251,7 +297,9 @@ class UpdatesTest(unittest.TestCase):
         self.assertIsNone(updates._prepared_row("fixture-app", "amd64"))
         self.assertEqual(list(updates._updates_directory().glob("*.deb")), [])
 
-    def _install_patches(self, plan=None, answer="yes", final_version="2.0"):
+    def _install_patches(
+        self, plan=None, answer="yes", final_version="2.0", api_digest=None,
+    ):
         if plan is None:
             plan = [{
                 "package": "app",
@@ -269,7 +317,7 @@ class UpdatesTest(unittest.TestCase):
             patch("tracking.resolve_repository", return_value=("owner/repo", 123)),
             patch("apt_handoff.assert_not_managed_by_apt", return_value={}),
             patch("inspection.selected_release_assets", return_value=(
-                "v2.0", self.asset_url, self.checksum_url,
+                "v2.0", self.asset_url, self.checksum_url, api_digest,
             )),
             patch("updates._download_checksum", return_value=self.digest),
             patch("apt_handoff._hash_file", return_value=self.digest),
@@ -282,8 +330,8 @@ class UpdatesTest(unittest.TestCase):
         return patches
 
     def test_install_requires_fresh_approval_and_confirms_installed_state(self):
-        self.prepare_fixture()
-        patches = self._install_patches()
+        self.prepare_fixture(api_digest=self.digest)
+        patches = self._install_patches(api_digest=self.digest)
         output = io.StringIO()
         with contextlib.ExitStack() as stack:
             mocks = []
@@ -297,6 +345,7 @@ class UpdatesTest(unittest.TestCase):
                 "Install this exact APT transaction? [y/N] ",
             )
         self.assertIn("Installation confirmed: app:amd64 2.0.", output.getvalue())
+        self.assertIn("GitHub API SHA-256 digest evidence: matches", output.getvalue())
 
     def test_declined_install_does_not_escalate(self):
         self.prepare_fixture()
@@ -313,11 +362,14 @@ class UpdatesTest(unittest.TestCase):
         existing = self.prepare_fixture()
         cases = [
             ("inspection.selected_release_assets",
-             ("v2.0", self.asset_url + ".changed", self.checksum_url),
+             ("v2.0", self.asset_url + ".changed", self.checksum_url, None),
              "asset identity changed"),
             ("inspection.selected_release_assets",
-             ("v2.0", self.asset_url, None),
+             ("v2.0", self.asset_url, None, None),
              "asset identity changed"),
+            ("inspection.selected_release_assets",
+             ("v2.0", self.asset_url, self.checksum_url, "0" * 64),
+             "GitHub API digest"),
             ("updates._download_checksum", "0" * 64, "checksum changed"),
             ("updates._download_checksum", None, "checksum changed"),
         ]
@@ -336,6 +388,21 @@ class UpdatesTest(unittest.TestCase):
                 privileged.assert_not_called()
                 self.assertEqual(updates._prepared_row("app", "amd64"), existing)
                 self.assertEqual(Path(existing[15]).read_bytes(), self.asset_bytes)
+
+    def test_removed_github_api_digest_blocks_install_before_approval(self):
+        existing = self.prepare_fixture(api_digest=self.digest)
+        with contextlib.ExitStack() as stack:
+            for item in self._install_patches():
+                stack.enter_context(item)
+            preview = stack.enter_context(patch("apt_handoff.simulate_install"))
+            approve = stack.enter_context(patch("builtins.input"))
+            privileged = stack.enter_context(patch("updates._sudo_install"))
+            with self.assertRaisesRegex(tracking.TrackingError, "GitHub API asset digest changed"):
+                updates.install("app")
+            preview.assert_not_called()
+            approve.assert_not_called()
+            privileged.assert_not_called()
+        self.assertEqual(updates._prepared_row("app", "amd64"), existing)
 
     def test_tampered_prepared_artifact_blocks_install_before_approval(self):
         existing = self.prepare_fixture()

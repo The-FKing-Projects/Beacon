@@ -37,10 +37,13 @@ class InspectionTest(unittest.TestCase):
 
     def test_selects_exact_release_asset_and_rejects_bad_urls(self):
         with patch("tracking.github_get", return_value=self.release):
-            tag, asset, checksum = inspection.selected_assets("owner/repo", "app_1.2.0_amd64.deb")
+            tag, asset, checksum, api_digest = inspection.selected_assets(
+                "owner/repo", "app_1.2.0_amd64.deb",
+            )
             self.assertEqual(tag, "v1.2.0")
             self.assertTrue(asset.endswith(".deb"))
             self.assertTrue(checksum.endswith("SHA256SUMS"))
+            self.assertIsNone(api_digest)
             for name in ("../app.deb", "unknown.deb", "SHA256SUMS"):
                 with self.subTest(name=name), self.assertRaises(tracking.TrackingError):
                     inspection.selected_assets("owner/repo", name)
@@ -48,6 +51,22 @@ class InspectionTest(unittest.TestCase):
         with patch("tracking.github_get", return_value=self.release):
             with self.assertRaisesRegex(tracking.TrackingError, "does not match"):
                 inspection.selected_assets("owner/repo", "app_1.2.0_amd64.deb")
+
+    def test_github_asset_digest_is_parsed_and_validated(self):
+        digest = "a" * 64
+        self.release["assets"][0]["digest"] = f"sha256:{digest}"
+        with patch("tracking.github_get", return_value=self.release):
+            self.assertEqual(
+                inspection.selected_assets("owner/repo", "app_1.2.0_amd64.deb")[3],
+                digest,
+            )
+        for value in ("sha512:" + digest, "sha256:" + "a" * 63, 123):
+            self.release["assets"][0]["digest"] = value
+            with patch("tracking.github_get", return_value=self.release):
+                with self.subTest(value=value), self.assertRaisesRegex(
+                    tracking.TrackingError, "invalid SHA-256 asset digest",
+                ):
+                    inspection.selected_assets("owner/repo", "app_1.2.0_amd64.deb")
 
     def test_checksum_entries_and_ambiguity(self):
         path = Path(self.temp.name) / "sums"
@@ -139,10 +158,19 @@ class InspectionTest(unittest.TestCase):
             with self.subTest(distro_version=distro_version):
                 self.assertEqual(inspection.version_relation(distro_version, asset_version), "newer")
 
-    def run_inspection(self, metadata=("app", "amd64", "1.2.0"), bad_checksum=False):
+    def run_inspection(
+        self, metadata=("app", "amd64", "1.2.0"), bad_checksum=False,
+        api_digest=None,
+    ):
         paths = []
         filename = "app_1.2.0_amd64.deb"
         digest = hashlib.sha256(b"example").hexdigest()
+        release = {
+            "tag_name": self.release["tag_name"],
+            "assets": [dict(asset) for asset in self.release["assets"]],
+        }
+        if api_digest is not None:
+            release["assets"][0]["digest"] = f"sha256:{api_digest}"
 
         def fake_download(url, dest, limit):
             paths.append(dest)
@@ -155,7 +183,7 @@ class InspectionTest(unittest.TestCase):
         output = io.StringIO()
         with patch("tracking.installed_package", return_value=("app", "amd64", "1.0-1")), \
              patch("tracking.resolve_repository", return_value=("owner/repo", 123)), \
-             patch("tracking.github_get", return_value=self.release), \
+             patch("tracking.github_get", return_value=release), \
              patch("inspection.download", side_effect=fake_download), \
              patch("inspection.inspect_fields", return_value=metadata), contextlib.redirect_stdout(output):
             try:
@@ -170,6 +198,13 @@ class InspectionTest(unittest.TestCase):
         self.assertIn("asset is newer", output)
         self.assertIn("No package was installed", output)
         self.assertIn("asset is newer", self.run_inspection(metadata=("app", "all", "1.2.0")))
+
+    def test_inspection_checks_github_api_digest(self):
+        digest = hashlib.sha256(b"example").hexdigest()
+        output = self.run_inspection(api_digest=digest)
+        self.assertIn("matches GitHub's upload-time digest", output)
+        with self.assertRaisesRegex(tracking.TrackingError, "GitHub API SHA-256 digest mismatch"):
+            self.run_inspection(api_digest="0" * 64)
 
     def test_missing_checksum_is_reported_without_claiming_integrity(self):
         self.release["assets"].pop()

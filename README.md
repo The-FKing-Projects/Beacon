@@ -208,21 +208,27 @@ download. Downloads are limited to 512 MiB. If the release has a `SHA256SUMS`
 asset, Beacon checks an exact filename entry; a missing entry or checksum file
 is reported, and a mismatch stops inspection. The checksum is not authenticated
 and does not prove authenticity: someone able to replace both the asset and
-the manifest can make them match. Only a file named `SHA256SUMS` with a
-supported exact-filename entry is checked; other checksum formats are not.
-The command does not check dependencies or
-execute package maintainer scripts, and never installs a package.
+the manifest can make them match. When GitHub supplies an asset SHA-256 digest,
+Beacon also checks the downloaded bytes against it; if both sources are
+available, both must match. A GitHub API digest is GitHub-generated integrity
+metadata, not publisher authentication. A malformed digest or mismatch stops
+inspection. Only a file named `SHA256SUMS` with a supported exact-filename
+entry is checked; other checksum formats are not. The command does not check
+dependencies or execute package maintainer scripts, and never installs a
+package.
 
 `--prepare` downloads and retains the exact selected asset under
 `$XDG_DATA_HOME/beacon/updates` (default `~/.local/share/beacon/updates`).
-It records the release, asset URL, package metadata, digest, checksum evidence,
-and installed version. A failed checksum, package identity mismatch, or
-architecture mismatch blocks preparation. An unsigned checksum published
-alongside the asset is not independent publisher authentication.
+It records the release, asset URL, package metadata, downloaded digest,
+checksum evidence, any GitHub API digest, and installed version. A failed
+checksum or API digest, package identity mismatch, or architecture mismatch
+blocks preparation. Neither an unsigned checksum published alongside the
+asset nor a GitHub API digest independently authenticates the publisher.
 
-`--install` revalidates the prepared artifact and confirmed upstream, shows
-the APT dependency transaction, blocks removals and downgrades, and asks for
-fresh approval before invoking the packaged privileged helper through `sudo`.
+`--install` revalidates the prepared artifact, any GitHub API digest, and the
+confirmed upstream; shows the APT dependency transaction; blocks removals and
+downgrades; and asks for fresh approval before invoking the packaged
+privileged helper through `sudo`.
 The helper stages a root-owned copy and enforces the reviewed transaction
 through APT's protocol-v3 pre-install hook. Package maintainer scripts run as
 root. Beacon trusts the administrator and root-run APT hooks; it does not

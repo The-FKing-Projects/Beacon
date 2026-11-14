@@ -178,12 +178,12 @@ class TrackingTest(unittest.TestCase):
         artifact.chmod(0o600)
         with contextlib.closing(tracking.open_database()) as db, db:
             db.execute(
-                "INSERT INTO prepared_updates VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO prepared_updates VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     "app", "amd64", 123, "Owner/Project", "v2.0", "app.deb",
                     "https://github.com/Owner/Project/releases/download/v2.0/app.deb",
                     None, None, "a" * 64, "asset-missing", "app", "amd64", "2.0",
-                    "1.0", str(artifact), "2026-01-01T00:00:00+00:00",
+                    "1.0", str(artifact), "2026-01-01T00:00:00+00:00", None,
                 ),
             )
         return artifact
@@ -390,7 +390,7 @@ class TrackingTest(unittest.TestCase):
             db.execute("PRAGMA user_version = 1")
 
         with contextlib.closing(tracking.open_database()) as db:
-            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 2)
+            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 3)
             self.assertEqual(
                 db.execute("SELECT * FROM tracked_packages").fetchall(),
                 [("app", "amd64", 123, "Owner/Project")],
@@ -404,6 +404,69 @@ class TrackingTest(unittest.TestCase):
             self.assertEqual(
                 db.execute("SELECT * FROM tracked_packages").fetchall(),
                 [("app", "amd64", 123, "Owner/Project")],
+            )
+
+    def test_version_two_store_migrates_with_prepared_update_preserved(self):
+        path = tracking.database_path()
+        path.parent.mkdir()
+        prepared_row = (
+            "app", "amd64", 123, "Owner/Project", "v2.0", "app.deb",
+            "https://github.com/Owner/Project/releases/download/v2.0/app.deb",
+            None, None, "a" * 64, "asset-missing", "app", "amd64", "2.0",
+            "1.0", "/tmp/app.deb", "2026-01-01T00:00:00+00:00",
+        )
+        with contextlib.closing(sqlite3.connect(path)) as db, db:
+            db.execute("""CREATE TABLE tracked_packages (
+                package_name TEXT NOT NULL,
+                architecture TEXT NOT NULL,
+                repository_id INTEGER NOT NULL,
+                repository_name TEXT NOT NULL,
+                PRIMARY KEY (package_name, architecture)
+            )""")
+            db.execute(
+                "INSERT INTO tracked_packages VALUES (?, ?, ?, ?)",
+                ("app", "amd64", 123, "Owner/Project"),
+            )
+            db.execute("""CREATE TABLE prepared_updates (
+                package_name TEXT NOT NULL,
+                architecture TEXT NOT NULL,
+                repository_id INTEGER NOT NULL,
+                repository_name TEXT NOT NULL,
+                release_tag TEXT NOT NULL,
+                asset_name TEXT NOT NULL,
+                asset_url TEXT NOT NULL,
+                checksum_asset_url TEXT,
+                expected_sha256 TEXT,
+                sha256 TEXT NOT NULL,
+                checksum_status TEXT NOT NULL,
+                asset_package_name TEXT NOT NULL,
+                asset_architecture TEXT NOT NULL,
+                asset_version TEXT NOT NULL,
+                installed_version TEXT NOT NULL,
+                artifact_path TEXT NOT NULL,
+                prepared_at TEXT NOT NULL,
+                PRIMARY KEY (package_name, architecture)
+            )""")
+            db.execute(
+                "INSERT INTO prepared_updates VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                prepared_row,
+            )
+            db.execute("PRAGMA user_version = 2")
+
+        with contextlib.closing(tracking.open_database()) as db:
+            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 3)
+            self.assertEqual(
+                db.execute("SELECT * FROM prepared_updates").fetchone(),
+                prepared_row + (None,),
+            )
+
+        backup = path.with_name(path.name + ".v2.bak")
+        self.assertTrue(backup.is_file())
+        with contextlib.closing(sqlite3.connect(backup)) as db:
+            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 2)
+            self.assertEqual(
+                db.execute("SELECT * FROM prepared_updates").fetchone(),
+                prepared_row,
             )
 
     def test_version_one_migration_refuses_to_overwrite_an_existing_backup(self):

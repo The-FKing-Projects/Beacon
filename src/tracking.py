@@ -136,7 +136,7 @@ TRACKED_COLUMNS = [
     ("repository_id", "INTEGER", 1, None, 0),
     ("repository_name", "TEXT", 1, None, 0),
 ]
-PREPARED_COLUMNS = [
+PREPARED_COLUMNS_V2 = [
     ("package_name", "TEXT", 1, None, 1),
     ("architecture", "TEXT", 1, None, 2),
     ("repository_id", "INTEGER", 1, None, 0),
@@ -154,6 +154,10 @@ PREPARED_COLUMNS = [
     ("installed_version", "TEXT", 1, None, 0),
     ("artifact_path", "TEXT", 1, None, 0),
     ("prepared_at", "TEXT", 1, None, 0),
+]
+PREPARED_COLUMNS = [
+    *PREPARED_COLUMNS_V2,
+    ("github_api_sha256", "TEXT", 0, None, 0),
 ]
 
 
@@ -176,12 +180,13 @@ def _create_prepared_table(connection):
         installed_version TEXT NOT NULL,
         artifact_path TEXT NOT NULL,
         prepared_at TEXT NOT NULL,
+        github_api_sha256 TEXT,
         PRIMARY KEY (package_name, architecture)
     )""")
 
 
-def _backup_before_migration(connection, path):
-    backup = path.with_name(path.name + ".v1.bak")
+def _backup_before_migration(connection, path, version):
+    backup = path.with_name(path.name + f".v{version}.bak")
     temporary = None
     try:
         descriptor, temporary = tempfile.mkstemp(
@@ -226,7 +231,7 @@ def _create_current_schema(connection):
         PRIMARY KEY (package_name, architecture)
     )""")
     _create_prepared_table(connection)
-    connection.execute("PRAGMA user_version = 2")
+    connection.execute("PRAGMA user_version = 3")
 
 
 def open_database():
@@ -244,24 +249,38 @@ def open_database():
             with connection:
                 connection.execute("BEGIN IMMEDIATE")
                 _create_current_schema(connection)
-            version = 2
+            version = 3
             objects = [("tracked_packages", "table"), ("prepared_updates", "table")]
         if set(objects) != {("tracked_packages", "table")} and version == 1:
             raise TrackingError("Unsupported or unrecognized tracking database; no changes made.")
-        if version not in (1, 2):
+        if version not in (1, 2, 3):
             raise TrackingError("Unsupported or unrecognized tracking database; no changes made.")
         columns = connection.execute("PRAGMA table_info(tracked_packages)").fetchall()
         if [tuple(column[1:]) for column in columns] != TRACKED_COLUMNS:
             raise TrackingError("Unrecognized tracking table structure; no changes made.")
         if version == 1:
-            _backup_before_migration(connection, path)
+            _backup_before_migration(connection, path, version)
             with connection:
                 connection.execute("BEGIN IMMEDIATE")
                 _create_prepared_table(connection)
-                connection.execute("PRAGMA user_version = 2")
-            version = 2
+                connection.execute("PRAGMA user_version = 3")
+            version = 3
             objects = [("tracked_packages", "table"), ("prepared_updates", "table")]
         if version == 2:
+            if set(objects) != {("tracked_packages", "table"), ("prepared_updates", "table")}:
+                raise TrackingError("Unsupported or unrecognized tracking database; no changes made.")
+            columns = connection.execute("PRAGMA table_info(prepared_updates)").fetchall()
+            if [tuple(column[1:]) for column in columns] != PREPARED_COLUMNS_V2:
+                raise TrackingError("Unrecognized prepared-update table structure; no changes made.")
+            _backup_before_migration(connection, path, version)
+            with connection:
+                connection.execute("BEGIN IMMEDIATE")
+                connection.execute(
+                    "ALTER TABLE prepared_updates ADD COLUMN github_api_sha256 TEXT"
+                )
+                connection.execute("PRAGMA user_version = 3")
+            version = 3
+        if version == 3:
             if set(objects) != {("tracked_packages", "table"), ("prepared_updates", "table")}:
                 raise TrackingError("Unsupported or unrecognized tracking database; no changes made.")
             columns = connection.execute("PRAGMA table_info(prepared_updates)").fetchall()
@@ -285,13 +304,14 @@ def open_database():
             "SELECT package_name, architecture, repository_id, repository_name, release_tag, "
             "asset_name, asset_url, checksum_asset_url, expected_sha256, sha256, checksum_status, "
             "asset_package_name, asset_architecture, asset_version, installed_version, artifact_path, "
-            "prepared_at FROM prepared_updates"
+            "prepared_at, github_api_sha256 FROM prepared_updates"
         )
         for row in prepared:
             (
                 name, architecture, identifier, repository, tag, asset_name, asset_url,
                 checksum_url, expected_digest, digest, checksum_status, asset_package,
                 asset_architecture, asset_version, installed_version, artifact_path, prepared_at,
+                github_api_digest,
             ) = row
             if (
                 not isinstance(name, str) or not PACKAGE_PATTERN.fullmatch(name) or ":" in name
@@ -327,6 +347,11 @@ def open_database():
                 or not isinstance(installed_version, str) or not installed_version
                 or not isinstance(artifact_path, str) or not os.path.isabs(artifact_path)
                 or not isinstance(prepared_at, str) or not prepared_at
+                or (github_api_digest is not None
+                    and (
+                        not isinstance(github_api_digest, str)
+                        or not re.fullmatch(r"[0-9a-f]{64}", github_api_digest)
+                    ))
             ):
                 raise TrackingError("Invalid saved prepared update; no changes made.")
         return connection
