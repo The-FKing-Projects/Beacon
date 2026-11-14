@@ -176,7 +176,7 @@ class AptHookExperiments(unittest.TestCase):
         hook.chmod(0o500)
         return hook
 
-    def run_production_helper(self, archive, manifest):
+    def run_production_helper(self, archive, manifest, seed_stale=False):
         apt_config = self.base / "production-apt"
         apt_config.mkdir()
         (apt_config / "apt.conf.d").mkdir()
@@ -200,11 +200,18 @@ class AptHookExperiments(unittest.TestCase):
         )
         source_root = Path(__file__).resolve().parents[1] / "src"
         runner = (
-            "import json, sys\n"
+            "import json, os, sys\n"
+            "import shlex\n"
             "from pathlib import Path\n"
-            f"sys.path.insert(0, {str(source_root)!r})\n"
+            "sys.path.insert(0, '/tmp/beacon-src')\n"
             "import apt_handoff\n"
-            f"apt_handoff.STAGING_ROOT = Path({str(self.base / 'run/beacon')!r})\n"
+            "apt_handoff.STAGING_ROOT = Path('/run/beacon')\n"
+            f"seed_stale = {seed_stale!r}\n"
+            "if seed_stale:\n"
+            "    apt_handoff.STAGING_ROOT.mkdir(mode=0o711, parents=True)\n"
+            "    stale = apt_handoff.STAGING_ROOT / 'transaction-interrupted'\n"
+            "    stale.mkdir(mode=0o700)\n"
+            "    (stale / 'selected.deb').write_bytes(b'interrupted fixture')\n"
             "original_run = apt_handoff.subprocess.run\n"
             "def checked_run(command, *args, **kwargs):\n"
             "    if command and command[0] == apt_handoff.APT_BINARY:\n"
@@ -214,20 +221,47 @@ class AptHookExperiments(unittest.TestCase):
             "            transaction: 0o711,\n"
             "            transaction / 'selected.deb': 0o444,\n"
             "            transaction / 'manifest.json': 0o444,\n"
-            "            transaction / 'apt-hook': 0o555,\n"
             "        }\n"
             "        for path, expected in expected_modes.items():\n"
             "            if path.stat().st_mode & 0o777 != expected:\n"
             "                raise AssertionError(f'Unexpected staging mode for {path}')\n"
+            "        hook_option = next(\n"
+            "            arg for arg in command\n"
+            "            if arg.startswith('DPkg::Pre-Install-Pkgs::=')\n"
+            "        )\n"
+            "        hook_command = shlex.split(hook_option.split('=', 1)[1])\n"
+            "        expected_command = [\n"
+            "            str(Path(apt_handoff.__file__).resolve()), '--hook',\n"
+            "            str(transaction / 'manifest.json'),\n"
+            "        ]\n"
+            "        if hook_command != expected_command:\n"
+            "            raise AssertionError(f'Unexpected hook command: {hook_command}')\n"
+            "        if not os.access(expected_command[0], os.X_OK):\n"
+            "            raise AssertionError('Packaged APT helper is not executable')\n"
+            "        version_option = next(\n"
+            "            arg for arg in command\n"
+            "            if arg.startswith('DPkg::Tools::options::')\n"
+            "        )\n"
+            "        if version_option != (\n"
+            "            f'DPkg::Tools::options::{expected_command[0]}::Version=3'\n"
+            "        ):\n"
+            "            raise AssertionError(f'Unexpected hook version option: {version_option}')\n"
+            "        if (transaction / 'apt-hook').exists():\n"
+            "            raise AssertionError('Hook script must not be staged for execution')\n"
             "    return original_run(command, *args, **kwargs)\n"
             "apt_handoff.subprocess.run = checked_run\n"
             f"apt_handoff.privileged_install({str(archive)!r}, "
             f"json.loads({json.dumps(manifest)!r}))\n"
+            "if seed_stale and stale.exists():\n"
+            "    raise AssertionError('Stale staging data was not removed')\n"
+            "if list(apt_handoff.STAGING_ROOT.glob('transaction-*')):\n"
+            "    raise AssertionError('Transaction staging was not cleaned up')\n"
         )
         return subprocess.run(
             [
                 "bwrap", "--unshare-all", "--ro-bind", "/", "/", "--tmpfs", "/tmp",
-                "--ro-bind", str(self.repo_root), str(self.repo_root),
+                "--tmpfs", "/run", "--dir", "/tmp/beacon-src",
+                "--ro-bind", str(source_root), "/tmp/beacon-src",
                 "--bind", str(self.base), str(self.base),
                 "--bind", str(apt_config), "/etc/apt",
                 "--bind", str(self.root / "var/lib/dpkg"), "/var/lib/dpkg",
@@ -287,20 +321,12 @@ class AptHookExperiments(unittest.TestCase):
 
     def test_production_privileged_helper_performs_isolated_upgrade(self):
         archive = self.build_upgrade_archive()
-        staging = self.base / "run/beacon"
-        staging.mkdir(parents=True, mode=0o711)
-        staging.chmod(0o711)
-        stale = staging / "transaction-interrupted"
-        stale.mkdir(mode=0o700)
-        (stale / "selected.deb").write_bytes(b"interrupted fixture")
         result = self.run_production_helper(
-            archive, self.production_helper_manifest(archive),
+            archive, self.production_helper_manifest(archive), seed_stale=True,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         status = (self.root / "var/lib/dpkg/status").read_text()
         self.assertIn("Version: 2.0", status)
-        self.assertFalse(stale.exists())
-        self.assertEqual(list((self.base / "run/beacon").glob("transaction-*")), [])
 
     def test_production_privileged_helper_rejects_plan_drift(self):
         archive = self.build_upgrade_archive()

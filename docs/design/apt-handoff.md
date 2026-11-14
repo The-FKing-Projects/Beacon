@@ -74,11 +74,13 @@ against a malicious administrator or promise universal rollback.
    helper rechecks package and installed-state identity, copies the artifact
    into root-owned staging that APT's sandbox can traverse and read but cannot
    modify, and runs APT's supported local-package workflow with `--no-remove`.
-   A command-line-appended protocol-v3 pre-install hook compares the actual
-   action set to the approved plan and rejects removals, downgrades,
-   unsupported actions, or a changed/missing selected archive. APT errors are
-   reported with the observed package state; partial system changes are
-   possible and no rollback is promised.
+   The command-line-appended protocol-v3 pre-install hook invokes Beacon's
+   packaged helper through `/usr/bin/python3`; it does not execute a generated
+   script from runtime staging, which may be mounted `noexec`. The hook
+   compares the actual action set to the approved plan and rejects removals,
+   downgrades, unsupported actions, or a changed/missing selected archive.
+   APT errors are reported with the observed package state; partial system
+   changes are possible and no rollback is promised.
 4. The parent verifies the installed package name, architecture, and version
    after APT returns success. The package's maintainer scripts execute with
    root privileges; only install packages whose publisher and contents you

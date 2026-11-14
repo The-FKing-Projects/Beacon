@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 """APT preview and transaction enforcement for pinned local packages."""
 
 import fcntl
@@ -6,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import shutil
 import stat
 import subprocess
@@ -723,21 +725,18 @@ def privileged_install(source, manifest):
             json.dumps(staged_manifest, sort_keys=True, separators=(",", ":")),
             0o444,
         )
-        hook_path = transaction / "apt-hook"
-        hook_code = (
-            "#!/usr/bin/python3\n"
-            "import sys\n"
-            f"sys.path.insert(0, {str(Path(__file__).resolve().parent)!r})\n"
-            "from apt_handoff import hook_main\n"
-            f"raise SystemExit(hook_main({str(manifest_path)!r}))\n"
+        command = shlex.join(
+            [
+                str(Path(__file__).resolve()),
+                "--hook",
+                str(manifest_path),
+            ]
         )
-        _write_staged_file(hook_path, hook_code, 0o555)
-        command = str(hook_path)
         result = subprocess.run(
             [
                 APT_BINARY,
                 "-o", f"DPkg::Pre-Install-Pkgs::={command}",
-                "-o", f"DPkg::Tools::options::{command}::Version=3",
+                "-o", f"DPkg::Tools::options::{Path(__file__).resolve()}::Version=3",
                 "--no-remove", "install", str(staged),
             ],
             check=False,
@@ -790,6 +789,8 @@ def hook_main(manifest_path):
 
 
 def privileged_main(arguments):
+    if len(arguments) == 2 and arguments[0] == "--hook":
+        return hook_main(arguments[1])
     if len(arguments) != 4 or arguments[0] != "--privileged-install":
         print("Invalid internal APT helper invocation.", file=sys.stderr)
         return 2
