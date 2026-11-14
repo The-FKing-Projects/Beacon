@@ -1,3 +1,9 @@
+beacon (1.1.0-1) unstable; urgency=medium
+
+  * Release for workflow run 43550677223: GitHub asset digest verification and Beacon mark.
+
+ -- The FK'ing Projects <FiendKing04@gmail.com>  Sat, 14 Nov 2026 03:15:34 +0000
+
 beacon (1.0.0-1) unstable; urgency=medium
 
   * Release for workflow run 43392202499: Beacon 1.0.0 stable release.
