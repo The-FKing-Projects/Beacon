@@ -243,12 +243,19 @@ available from a configured repository. Any repository version now blocks
 Beacon preparation before release selection or download; a locally installed
 newer version no longer hides APT's ability to manage the package.
 
-## Kubuntu 26.04: Beacon v1.1.2 real-world qualification
+## Kubuntu 26.04: Beacon v1.1.2 operator-reported summary
 
-User-reported results on Kubuntu 26.04 with Beacon **v1.1.2** installed from
-the project's signed APT repository. Packages below were installed as
-standalone local `.deb` candidates (no configured APT/PPA origin for the
-installed version) unless noted. The operator ran the full local workflow:
+**Auditability note:** this is an operator-reported summary from a Kubuntu
+26.04 desktop running Beacon **v1.1.2** (signed APT install). It does **not**
+yet meet the dated live-case checklist below (observation date, per-package
+architecture, full command transcripts, and explicit verification limits are
+not recorded here). Treat outcomes as directional evidence for backlog
+prioritization, not as a fully auditable qualification transcript. A later
+pass can promote rows to dated records when those fields are captured.
+
+Packages below were described as standalone local `.deb` candidates (no
+configured APT/PPA origin for the installed version) unless noted. The
+operator reported the full local workflow:
 
 `beacon` → `--suggest` → `--track` → `--check` → `--inspect` → `--prepare` →
 `--install`
@@ -311,9 +318,10 @@ providers, or treating digests as authenticity proofs.
 
 Equal upstream versions from `--check` do **not** mean the packages are
 identical. `--inspect` / `--prepare` use the asset's full Debian version for
-direction and still require exact package name and architecture matches.
-Expanding the supported tag set is backlog work and needs unambiguous
-mappings plus offline regressions before any code change.
+direction and still require an exact package-name match plus a compatible
+architecture: the asset architecture must equal the installed architecture or
+be `all`. Expanding the supported tag set is backlog work and needs
+unambiguous mappings plus offline regressions before any code change.
 
 ## Supporting lab observations (2026-11-14)
 
@@ -333,8 +341,8 @@ third-party package installations; temporary `XDG_STATE_HOME` only):
 ## Post-v1 qualification status
 
 v1.1.x turned several original backlog rows into offline regressions and
-dated live observations, including the Kubuntu 26.04 v1.1.2 desktop
-qualification above. Fixture coverage and one host's upgrades still do not
+dated live observations, including the Kubuntu 26.04 v1.1.2 operator-reported
+summary above. Fixture coverage and one host's upgrades still do not
 generalize to every project; keep expanding cases rather than weakening
 confirmation or integrity gates.
 
@@ -345,7 +353,7 @@ confirmation or integrity gates.
 | Ambiguous or renamed package/asset | `fd` vs `fd-find` rejection, musl filename non-matches, and arm64-vs-amd64 filtering | Moonfin/Feishin conservative filenames; CloverEye hyphen/name mismatch; bat musl internal identity `bat-musl` | Keep exact user selection; optional post-inspect “likely” marking is backlog only |
 | Unsupported upstream tag/version | Epochs, `ubuntu1` and other distro suffixes, prereleases, and malformed tags stay unknown; numeric Debian revisions compare upstream-only | `github-desktop` build/tag mismatch unknown; `spdx-licenses` `+ds` unknown; lab epoch/`ubuntu` unknown | Broader comparison only with unambiguous mappings and regressions |
 | Interrupted or changed preparation | Deterministic fault injection in `tests/test_updates.py` for interrupted downloads, storage failures, changed URLs/checksums, and modified bytes | None required for CI; live mutation of third-party releases is out of scope | Retain regressions; do not claim crash atomicity between filesystem writes and SQLite commits |
-| Full reviewed install path | Isolated APT suite and packaging gates | Kubuntu upgrades for `stopgrade`, `clover-eye`, and `moonfin` after v1.1.2 helper fix | Additional standalone projects; never unattended installs |
+| Full reviewed install path | Isolated APT suite and packaging gates | Operator-reported Kubuntu upgrades for `stopgrade`, `clover-eye`, and `moonfin` after v1.1.2 helper fix (summary; not a dated transcript) | Capture dated auditable records; never unattended installs |
 
 ## Follow-up backlog (docs only; not authorized work)
 

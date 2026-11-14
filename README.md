@@ -201,7 +201,7 @@ distro-specific revisions such as `-1ubuntu1` or `+ds`, build-suffixed installed
 versions, prereleases, and other tag formats are reported as unknown. Use
 `--inspect` for the selected asset's full Debian version comparison. Dated
 desktop examples are recorded in the
-[discovery cases](docs/research/discovery-test-cases.md#kubuntu-2604-beacon-v112-real-world-qualification).
+[discovery cases](docs/research/discovery-test-cases.md#kubuntu-2604-beacon-v112-operator-reported-summary).
 
 `--inspect` downloads the exact named asset from the tracked repository's
 latest stable release into a temporary directory, compares its package name,
@@ -362,9 +362,10 @@ not claims of new product scope.
 
 1. **Broader real-world evidence.** **Partial.** The
    [discovery cases](docs/research/discovery-test-cases.md)
-   now cover Beacon and CloverEye workflows, a Kubuntu 26.04 v1.1.2 desktop
-   qualification with several standalone upgrades and tracked packages,
-   bat/fd-find available-package observations, and offline fixtures. Continue
+   now cover Beacon and CloverEye workflows, a Kubuntu 26.04 v1.1.2
+   operator-reported desktop summary with several standalone upgrades and
+   tracked packages, bat/fd-find available-package observations, and offline
+   fixtures. Continue
    expanding dated observations for identity, source evidence, version
    comparison, asset selection, and verification limits; keep live GitHub
    checks separate from deterministic CI.
