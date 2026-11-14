@@ -155,8 +155,9 @@ beacon --untrack <package>
 
 Verify the repository is the package's upstream before confirming it. Beacon
 does not determine that relationship for you. `--suggest` checks an exact
-GitHub repository homepage when present and searches the first page of GitHub
-repository names. Each candidate is labeled as a direct homepage match, exact
+GitHub repository homepage when present (URL fragments such as `#readme` are
+ignored for matching; query strings are not) and searches the first page of
+GitHub repository names. Each candidate is labeled as a direct homepage match, exact
 name match, similar name, or search-only result. If multiple repositories tie
 for the strongest nonzero evidence, Beacon warns that no single upstream is
 identified. If an exact package-name match conflicts with the package

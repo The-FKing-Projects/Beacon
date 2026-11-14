@@ -31,8 +31,11 @@ def homepage_repository(homepage):
         parsed = urlparse(homepage)
     except ValueError:
         return None
+    # Ignore URL fragments (#readme, etc.) so a repository homepage with a
+    # fragment still ranks as a direct match. Query strings and params remain
+    # unsupported — they are not normalized here.
     if (parsed.scheme != "https" or parsed.netloc.lower() != "github.com"
-            or parsed.query or parsed.fragment or parsed.params):
+            or parsed.query or parsed.params):
         return None
     value = parsed.path.strip("/")
     try:
