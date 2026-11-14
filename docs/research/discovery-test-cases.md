@@ -241,19 +241,35 @@ available from a configured repository. Any repository version now blocks
 Beacon preparation before release selection or download; a locally installed
 newer version no longer hides APT's ability to manage the package.
 
-## Post-v1 qualification backlog
+## Post-v1 qualification status
 
-The next qualification work should expand the observed cases rather than
-assume that successful self-updating or one third-party inspection generalizes.
-These are planned cases, not completed live validations:
+v1.1.x turned several original backlog rows into offline regressions and
+limited live observations. Successful Beacon self-update and one third-party
+inspection still do not generalize; expand installed standalone cases rather
+than treating fixture coverage as finished live validation.
 
-| Case | Evidence to record | Required behavior |
+| Case | Offline / fixture coverage | Live observation | Still needed |
+| --- | --- | --- | --- |
+| Package with a direct GitHub homepage | Ranking, homepage-vs-exact-name conflict warning, and no auto-save covered for simulated `bat`/`fd-find` installs | Available-package homepage metadata for `bat` and `fd` recorded; installed `--suggest` live paths for those packages were not run (packages were not installed) | More installed standalone packages whose homepage is an exact GitHub repository URL, with dated `--suggest` output and temporary tracking state |
+| Installed version also managed by APT | APT ownership blocks preparation when any policy version comes from a repository, including a newer local candidate over an older repo version | `bat` and `fd-find` available candidates classified as Ubuntu Repository | Additional installed packages that look local but remain APT-managed; confirm handoff refusal without changing host packages |
+| Ambiguous or renamed package/asset | `fd` vs `fd-find` rejection, musl filename non-matches, and arm64-vs-amd64 filtering | CloverEye filename vs package-name difference; `bat`/`fd` multi-asset releases | Further renamed or multi-asset projects; keep exact user selection and internal identity/architecture rejection |
+| Unsupported upstream tag/version | Epochs, `ubuntu1` and other distro suffixes, prereleases, and malformed tags stay unknown; numeric Debian revisions compare upstream-only | `bat`/`fd-find` release-tag comparisons correctly unknown for `ubuntu1` revisions; asset Debian comparison used for direction | Only add tag mappings when a real case shows an unambiguous interpretation; otherwise keep unknown |
+| Interrupted or changed preparation | Deterministic fault injection in `tests/test_updates.py` for interrupted downloads, storage failures, changed URLs/checksums, and modified bytes | None required for CI; live mutation of third-party releases is out of scope | Retain regressions; do not claim crash atomicity between filesystem writes and SQLite commits |
+
+## Remaining live qualification sketches
+
+Conservative cases that can guide later suggestion and version-comparison
+work. These are documentation sketches, not implementation commitments, and
+they do not authorize new providers or automatic upstream confirmation.
+
+| Proposed case | Why it helps | Guardrails |
 | --- | --- | --- |
-| Package with a direct GitHub homepage | Installed metadata, repository identity, alternatives, and conflicting evidence | Prefer the direct-homepage evidence without automatically confirming the association |
-| Installed version also managed by APT | Exact installed-version origins and available APT candidate | Report APT ownership and preserve the existing handoff policy |
-| Ambiguous or renamed package/asset | Internal package identity, filename hints, architecture, and competing assets | Require exact user selection; reject internal identity or architecture mismatches |
-| Unsupported upstream tag/version | Installed Debian version, exact release tag, and selected asset version | Report unknown release comparison unless a supported mapping is established; use full Debian comparison for the selected asset |
-| Interrupted or changed preparation | Pinned release/asset identity, digest, persisted association, and artifact state | Report the failure, preserve valid state, and reject stale or changed installation inputs |
+| Third-party installed local `.deb` with a direct GitHub homepage | Complements Beacon/CloverEye with homepage-ranked `--suggest` evidence on a real installed standalone package | Temporary `XDG_STATE_HOME`; confirm associations only in test state; do not install third-party updates on a developer host |
+| Competing glibc vs musl or multi-arch `.deb` assets for one release | Stresses filename hints versus internal package identity and architecture filtering | Exact asset selection only; reject identity/architecture mismatches; record what was not verified |
+| Upstream tag with prerelease or non-numeric Debian revision on the installed package | Confirms release-tag comparison stays unknown while `--inspect` still reports full Debian direction for a selected asset | No new version parser without an unambiguous mapping and offline regression |
+| Same upstream version, different Debian revision or rebuild | Separates upstream-tag equality from package identity; equal tags must not imply identical packages | Use selected asset metadata; do not treat tag match as install approval |
+| Vendor download-only updater (no GitHub release asset) | Evaluation input for whether a non-GitHub source can meet Beacon's identity and verification bar | Design/evaluation notes only until source identity, redirects, and artifact verification are defined; no provider implementation in this track |
+| Caprine-style same-version GitHub asset without `SHA256SUMS` | Revisits integrity messaging when versions match and only an unauthenticated download digest is available | Snapshot observation; no claim about future releases; unsigned digests are not publisher authentication |
 
 For each new live case, record the observation date, package and architecture,
 command results, and what was and was not verified. Use temporary Beacon state

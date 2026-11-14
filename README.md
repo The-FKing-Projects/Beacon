@@ -237,7 +237,7 @@ APT operation can leave partial package state, which Beacon reports.
 Re-run `--check`, select and `--prepare` the desired asset, then review it
 again with `--install`; do not assume a failed installation was rolled back.
 The [APT handoff design](docs/design/apt-handoff.md) documents the trust
-boundary, safety mechanism, and remaining qualification requirements.
+boundary, safety mechanism, qualification record, and accepted limitations.
 
 ### Tracking-store errors and recovery
 
@@ -352,32 +352,48 @@ release assets or make installing those assets safe.
 
 ## Post-v1 roadmap
 
-The proposed v1.1 focus is real-world discovery and update reliability. These
-are planned acceptance criteria, not claims of implemented support:
+v1.1.x (through [v1.1.2](https://github.com/The-FKing-Projects/Beacon/releases/tag/v1.1.2))
+delivered much of the original post-v1 reliability focus. The list below
+reconciles those acceptance criteria with the current implementation. Items
+marked partial or unfinished remain goals for further qualification; they are
+not claims of new product scope.
 
-1. **Broader real-world evidence.** Expand the
-   [discovery cases](docs/research/discovery-test-cases.md#post-v1-qualification-backlog)
-   beyond Beacon and CloverEye. Record expected identity, source evidence,
-   version comparison, asset selection, and verification limits. Turn useful
-   metadata cases into offline regression fixtures; keep live GitHub checks
-   separate from deterministic CI.
-2. **Better upstream suggestions.** Use those cases to identify which
-   additional evidence actually improves matches. Show conflicting evidence
-   and preserve explicit user confirmation; do not promote filename or
-   name similarity into proof of package provenance.
-3. **Reliable update comparisons.** Add version-format support only where
-   upstream tag interpretation is unambiguous and backed by regression cases.
-   Unsupported formats must remain explicitly unknown; use the selected
-   asset's full Debian version for installation decisions.
-4. **Preserved installation safety.** Exercise reviewed preparation and
-   installation with local fixtures in the isolated APT suite. Retain the
-   existing source confirmation, exact asset selection, fresh transaction
-   approval, removal/downgrade blocking, and post-install verification gates.
-5. **Other standalone `.deb` sources.** Evaluate packages whose built-in
-   checker only points users to a vendor download, but whose update is not
-   available from APT or a PPA. The current updater is GitHub-only; any
-   additional provider needs an explicit design for version discovery, source
-   identity, redirects, and artifact verification before implementation.
+1. **Broader real-world evidence.** **Partial.** The
+   [discovery cases](docs/research/discovery-test-cases.md)
+   now cover Beacon and CloverEye end-to-end workflows, bat/fd-find
+   available-package observations, and offline fixtures derived from those
+   cases. Live installed standalone `.deb` evidence beyond Beacon and
+   CloverEye is still limited. Continue expanding dated observations for
+   identity, source evidence, version comparison, asset selection, and
+   verification limits; keep live GitHub checks separate from deterministic
+   CI.
+2. **Better upstream suggestions.** **Partial.** `--suggest` prefers a direct
+   GitHub homepage, warns when an exact-name candidate conflicts with that
+   homepage, surfaces ties and alternatives, and never saves an association
+   without confirmation. Search still uses package-name results only; display
+   names, descriptions, aliases, README search, and calibrated match scores
+   stay deferred until more labeled cases justify them. Filename and name
+   similarity remain hints, not proof of provenance.
+3. **Reliable update comparisons.** **Partial.** Release-tag comparison
+   supports three-component numeric versions with an optional `v` prefix and a
+   numeric Debian revision on the installed side. Epochs, distro-specific
+   revisions such as `-1ubuntu1`, prereleases, and other tag formats remain
+   explicitly unknown. Installation decisions use the selected asset's full
+   Debian version. Add further tag mappings only where interpretation is
+   unambiguous and backed by regression cases.
+4. **Preserved installation safety.** **Shipped** for the declared support
+   matrix. Reviewed preparation and installation are exercised with local
+   fixtures in the isolated APT suite; source confirmation, exact asset
+   selection, GitHub API digest checks, fresh transaction approval,
+   removal/downgrade blocking, APT ownership blocking, and post-install
+   verification are retained. Keep these gates; do not weaken them for
+   convenience.
+5. **Other standalone `.deb` sources.** **Not started.** Evaluate packages
+   whose built-in checker only points users to a vendor download, but whose
+   update is not available from APT or a PPA. The updater remains GitHub-only;
+   any additional provider needs an explicit design for version discovery,
+   source identity, redirects, and artifact verification before
+   implementation.
 
 Any future Topgrade integration should focus only on the standalone `.deb`
 gap, avoid duplicating its existing package-manager support, and preserve
