@@ -155,6 +155,15 @@ candidates**, not installed standalone packages; they are not a full
 | `bat` | `0.25.0-5ubuntu1` | `https://github.com/sharkdp/bat` | [`bat_0.26.1_amd64.deb`](https://github.com/sharkdp/bat/releases/tag/v0.26.1) | `bat:amd64` version `0.26.1` |
 | `fd-find` | `10.3.0-2ubuntu1` | `https://github.com/sharkdp/fd` | [`fd_10.5.2_amd64.deb`](https://github.com/sharkdp/fd/releases/tag/v10.5.2) | `fd:amd64` version `10.5.2` |
 
+On 2026-11-14 (UTC), read-only lookups through Beacon's GitHub release parser
+validated the release-page and Debian-asset URLs for four public repositories:
+Beacon `v1.0.0` (1 `.deb`), CloverEye `v0.1.1` (1), `sharkdp/bat` `v0.26.1`
+(8), and `sharkdp/fd` `v10.5.2` (8). Each URL matched the exact repository,
+tag, and asset filename. The `bat` and `fd` releases also list musl-named
+assets. This confirms the current API URL shape only; no asset was downloaded,
+and package identity, compatibility, integrity, and authenticity were not
+checked.
+
 The same `bat` release also offers `bat_0.26.1_arm64.deb`. On 2026-11-13,
 temporary inspection found internal metadata `bat:arm64` version `0.26.1`
 and SHA-256
