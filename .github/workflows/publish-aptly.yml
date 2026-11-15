@@ -7,17 +7,28 @@ on:
         description: Existing GitHub Release tag to publish to APT
         required: true
         type: string
+  release:
+    types: [published]
 
 permissions:
   contents: read
 
 jobs:
   publish:
+    # workflow_dispatch: only from main. release published: tag event (not main),
+    # so require a non-draft, non-prerelease release instead of refs/heads/main.
     if: >-
       github.repository == 'The-FKing-Projects/Beacon' &&
-      github.event_name == 'workflow_dispatch' &&
-      github.ref == 'refs/heads/main' &&
-      vars.APTLY_PUBLISH_ENABLED == 'true'
+      vars.APTLY_PUBLISH_ENABLED == 'true' &&
+      (
+        (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+        (
+          github.event_name == 'release' &&
+          github.event.action == 'published' &&
+          github.event.release.draft == false &&
+          github.event.release.prerelease == false
+        )
+      )
     runs-on:
       - self-hosted
       - Linux
@@ -29,15 +40,27 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.tag }}
+          TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.event.release.tag_name }}
           EVENT_NAME: ${{ github.event_name }}
           WORKFLOW_REF: ${{ github.ref }}
         run: |
           set -euo pipefail
-          if [ "$GITHUB_REPOSITORY" != "The-FKing-Projects/Beacon" ] ||
-             [ "$EVENT_NAME" != "workflow_dispatch" ] ||
-             [ "$WORKFLOW_REF" != "refs/heads/main" ]; then
-            echo "APT publication requires workflow_dispatch on The-FKing-Projects/Beacon main." >&2
+          if [ "$GITHUB_REPOSITORY" != "The-FKing-Projects/Beacon" ]; then
+            echo "APT publication is limited to The-FKing-Projects/Beacon." >&2
+            exit 1
+          fi
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            if [ "$WORKFLOW_REF" != "refs/heads/main" ]; then
+              echo "Manual APT publication requires workflow_dispatch on main." >&2
+              exit 1
+            fi
+          elif [ "$EVENT_NAME" = "release" ]; then
+            if [[ "$WORKFLOW_REF" != refs/tags/v* ]]; then
+              echo "Release APT publication requires a vMAJOR.MINOR.PATCH tag ref." >&2
+              exit 1
+            fi
+          else
+            echo "Unsupported event for APT publication: $EVENT_NAME" >&2
             exit 1
           fi
           if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
