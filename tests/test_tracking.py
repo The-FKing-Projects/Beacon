@@ -12,8 +12,10 @@ from unittest.mock import MagicMock, patch
 from urllib.error import HTTPError, URLError
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 import tracking
 import beacon
+import filename_match_fixtures
 
 
 class TrackingTest(unittest.TestCase):
@@ -843,6 +845,20 @@ class TrackingTest(unittest.TestCase):
         moonfin = tracking.asset_match("Moonfin_Linux_v3.1.0.deb", "moonfin", "amd64")
         self.assertIn("Linux platform token treated as amd64", moonfin)
 
+    def test_feishin_moonfin_style_filename_fixtures(self):
+        """Extra offline coverage for #47 Feishin/Moonfin-style likely matchers."""
+        for filename, package, architecture, expected in filename_match_fixtures.all_prefix_cases():
+            with self.subTest(filename=filename, package=package, architecture=architecture):
+                result = tracking.asset_match(filename, package, architecture)
+                self.assertTrue(
+                    result.startswith(expected),
+                    msg=f"{filename} for {package}:{architecture} -> {result}",
+                )
+        for filename, package, architecture, fragment in filename_match_fixtures.REQUIRED_MESSAGE_FRAGMENTS:
+            with self.subTest(fragment=fragment, filename=filename):
+                result = tracking.asset_match(filename, package, architecture)
+                self.assertIn(fragment, result)
+
     def test_asset_reporting_no_match_and_multiple_matches(self):
         url = "https://github.com/owner/project/releases/download/v1/"
         cases = [
@@ -857,6 +873,33 @@ class TrackingTest(unittest.TestCase):
             with contextlib.redirect_stdout(output):
                 tracking.print_deb_assets(assets, "app", "amd64")
             self.assertIn(expected, output.getvalue())
+
+        # Feishin/Moonfin listing: one likely + competing unverified/wrong-arch stay hints only.
+        mixed = [
+            ("Feishin-linux-amd64.deb", url + "feishin"),
+            ("Feishin-musl-linux-amd64.deb", url + "musl"),
+            ("Moonfin_Linux_v3.1.0.deb", url + "moonfin-wrong-pkg"),
+        ]
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            tracking.print_deb_assets(mixed, "feishin", "amd64")
+        text = output.getvalue()
+        self.assertIn("Feishin-linux-amd64.deb: Likely candidate", text)
+        self.assertIn("Feishin-musl-linux-amd64.deb: Unverified", text)
+        self.assertIn("Moonfin_Linux_v3.1.0.deb: Unverified", text)
+        self.assertNotIn("Multiple likely candidates", text)
+        self.assertIn("Package identity, contents, compatibility, and integrity have not been verified.", text)
+
+        moonfin_only = [("Moonfin_Linux_v3.1.0.deb", url + "moonfin")]
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            tracking.print_deb_assets(moonfin_only, "moonfin", "amd64")
+        self.assertIn("Linux platform token treated as amd64", output.getvalue())
+
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            tracking.print_deb_assets(moonfin_only, "moonfin", "arm64")
+        self.assertIn("No likely candidates found", output.getvalue())
 
     def test_release_asset_validation(self):
         release = {"tag_name": "v1", "html_url": "https://github.com/owner/repo/releases/tag/v1"}
