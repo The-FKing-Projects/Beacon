@@ -3,9 +3,14 @@
 ## Status
 
 The bounded APT handoff described here is implemented in the CLI as
-`--prepare` and `--install`. The deterministic suite, isolated real APT
-transactions, Debian package build, and installed-CLI smoke test have passed
-in containers for all five declared Debian/Ubuntu targets.
+`--prepare` and `--install` for the **v1.1.2** packaged helper and later.
+The deterministic suite, isolated real APT transactions, Debian package
+build, and installed-CLI smoke test have passed in containers for all five
+declared Debian/Ubuntu targets.
+
+**How to run the suites safely** (isolation rules, opt-in command, `/run`
+`noexec` helper note, live discovery vs CI):
+[Isolated APT suite](isolated-apt-suite.md).
 
 The trust boundary is explicit: Beacon downloads and prepares packages as the
 user, and the privileged helper copies the selected bytes into a root-owned
@@ -70,17 +75,21 @@ against a malicious administrator or promise universal rollback.
    transaction and requires fresh confirmation after showing all package
    changes. Removals, downgrades, ambiguous identities, and changed state are
    blockers.
-3. After approval, Beacon invokes a root-owned helper through `sudo`. The
-   helper rechecks package and installed-state identity, copies the artifact
-   into root-owned staging that APT's sandbox can traverse and read but cannot
-   modify, and runs APT's supported local-package workflow with `--no-remove`.
-   The command-line-appended protocol-v3 pre-install hook invokes Beacon's
-   packaged helper through `/usr/bin/python3`; it does not execute a generated
-   script from runtime staging, which may be mounted `noexec`. The hook
-   compares the actual action set to the approved plan and rejects removals,
-   downgrades, unsupported actions, or a changed/missing selected archive.
-   APT errors are reported with the observed package state; partial system
-   changes are possible and no rollback is promised.
+3. After approval, Beacon invokes a root-owned helper through `sudo` as
+   `/usr/bin/python3 /usr/lib/beacon/apt_handoff.py …`. The helper rechecks
+   package and installed-state identity, copies the artifact into root-owned
+   staging under `/run/beacon/` that APT's sandbox can traverse and read but
+   cannot modify, and runs APT's supported local-package workflow with
+   `--no-remove`. The command-line-appended protocol-v3 pre-install hook runs
+   that same **packaged** helper (not a generated script under `/run`). Staging
+   on `/run` may be mounted `noexec`; v1.1.2 fixed the failure where hook
+   execution depended on a runnable path on that mount (see Kubuntu
+   `stopgrade` in
+   [discovery cases](../research/discovery-test-cases.md#kubuntu-2604-beacon-v112-operator-reported-summary)).
+   The hook compares the actual action set to the approved plan and rejects
+   removals, downgrades, unsupported actions, or a changed/missing selected
+   archive. APT errors are reported with the observed package state; partial
+   system changes are possible and no rollback is promised.
 4. The parent verifies the installed package name, architecture, and version
    after APT returns success. The package's maintainer scripts execute with
    root privileges; only install packages whose publisher and contents you
@@ -143,11 +152,16 @@ failing hook aborts.
 
 ### Isolated real-transaction experiments
 
+Operator-facing runbook (prerequisites, fail-closed isolation, CI vs local):
+[Isolated APT suite](isolated-apt-suite.md).
+
 The opt-in experiments in `tests/test_apt_hook_experiments.py` run real APT and
 dpkg against a temporary dpkg root inside a rootless bubblewrap namespace. The
 host filesystem is read-only except the test's temporary directory; package
 fixtures have no maintainer scripts or payload, APT configuration and state are
 isolated, and the namespace has no network. These are not host installations.
+They also cover the production privileged helper's isolated upgrade / plan-drift
+paths used by `--install` after v1.1.2.
 The experiments were run on amd64 using Ubuntu 26.04.1 (APT 3.2.1 / dpkg
 1.23.7), Debian 12 container (APT 2.6.2 / dpkg 1.21.23), and Ubuntu 24.04
 container (APT 2.8.3 / dpkg 1.22.6).

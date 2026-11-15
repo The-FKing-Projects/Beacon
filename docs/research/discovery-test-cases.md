@@ -264,7 +264,9 @@ operator reported the full local workflow:
 
 Prepared artifacts were retained under `~/.local/share/beacon/updates/`.
 Installations used the reviewed APT handoff after the v1.1.2 packaged-helper
-fix for `/run` `noexec` staging. Digests and checksum matches below are
+fix for `/run` `noexec` staging (packaged helper under `/usr`; staging under
+`/run/beacon/` — see [isolated APT suite](../design/isolated-apt-suite.md) and
+[APT handoff](../design/apt-handoff.md)). Digests and checksum matches below are
 integrity evidence only; they do **not** prove publisher authenticity.
 
 ### Successful upgrades
