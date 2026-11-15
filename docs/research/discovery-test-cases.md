@@ -273,14 +273,14 @@ integrity evidence only; they do **not** prove publisher authenticity.
 | --- | --- | --- |
 | `stopgrade` | `17.6.1` → `17.16.0` | First real third-party upgrade on this host; exposed the `/run` `noexec` helper bug fixed in v1.1.2 |
 | `clover-eye` | `0.1.1` → `0.1.3` | Clean install with large dependency transaction; exact `SHA256SUMS` entry and GitHub API digest both verified |
-| `moonfin` | `3.0.0` → `3.1.0` | Filename `Moonfin_Linux_v3.1.0.deb` was **not** marked a likely candidate (conservative heuristics); exact selection, inspect, prepare, and install still succeeded |
+| `moonfin` | `3.0.0` → `3.1.0` | Operator report: `Moonfin_Linux_v3.1.0.deb` was not marked likely under older heuristics; exact selection, inspect, prepare, and install still succeeded. Current matching treats that Linux+version pattern as likely for **amd64 only** (unit-tested); exact selection remains required |
 
 ### Tracked without upgrade (or not upgradable via Beacon)
 
 | Package | Observed check | Notes |
 | --- | --- | --- |
 | `caprine` | Current `2.61.0` | Homepage included a `#readme` fragment; at the time of the operator report that missed the “very high” direct-homepage tier (name search still found the repo). Fragment stripping is now covered by unit tests so `#readme` ranks as a direct homepage match without auto-confirm |
-| `feishin` | Current `1.17.0` | Asset `Feishin-linux-amd64.deb` left **unverified** (no package-name match); conservative and correct |
+| `feishin` | Current `1.17.0` | Operator report left `Feishin-linux-amd64.deb` unverified; current matching treats product-`linux`-arch as likely when the product token matches the package name (unit-tested); exact selection remains required |
 | `github-desktop` | Unknown comparison | Installed `3.7.1-build.50` versus tag `release-3.4.13-linux1`; release-tag comparison refused; assets not marked likely |
 | `spdx-licenses` | No `.deb` assets; version now comparable | Installed `3.27.0+ds-1` versus tag `v3.29.0`: `--check` can compare after ignoring `+ds` (see [version comparison](../design/version-comparison.md)); upstream still ships XML, not a Debian package, so Beacon cannot prepare/install |
 | `discord-ptb` | No usable upstream | Homepage `discord.com`; weak name-only search matches; correct negative — Beacon did not invent a GitHub updater path |
@@ -298,7 +298,7 @@ integrity evidence only; they do **not** prove publisher authenticity.
 ### Observed limitations (do not weaken gates)
 
 - Release-tag version comparison remains narrow (see rules below)
-- Filename heuristics stay conservative; title-case or channel-style names often stay unverified until exact user selection
+- Filename heuristics stay conservative: product-`linux`-arch and amd64-only product-`Linux`-version names can mark likely; musl/wrong-arch/wrong-product names stay unverified; exact selection is still required
 - Homepage query strings and non-repository marketing URLs still miss the direct homepage tier; fragments such as `#readme` are ignored for matching
 - `--check-all` summarizes every tracked association read-only; it never prepares or installs
 - Tracking does not auto-update associations when upstreams rename or move
@@ -343,7 +343,7 @@ weakening confirmation or integrity gates.
 | --- | --- | --- | --- |
 | Package with a direct GitHub homepage | Simulated installed `--suggest` coverage is for `fd-find` (homepage outranks a synthetic exact-name search hit; no auto-save) and Caprine-style `#readme` fragment stripping. `bat` offline coverage is available-package provenance, release-tag/asset comparison, and filename matching — not a simulated installed suggestion flow | Kubuntu standalone workflow; lab `iputils-ping` very-high homepage rank; Caprine `#readme` was an operator miss before fragment stripping | Query-string homepages remain unsupported; confirm ranking without auto-save |
 | Installed version also managed by APT | APT ownership blocks preparation when any policy version comes from a repository, including a newer local candidate over an older repo version | Lab `iputils-ping` prepare refused; `bat`/`fd-find`/`gh` Ubuntu Repository after fresh apt lists | Repeat handoff refusal on more APT-managed desktop packages |
-| Ambiguous or renamed package/asset | `fd` vs `fd-find` rejection, musl filename non-matches, and arm64-vs-amd64 filtering | Moonfin/Feishin conservative filenames; CloverEye hyphen/name mismatch; bat musl internal identity `bat-musl` | Keep exact user selection; optional post-inspect “likely” marking is backlog only |
+| Ambiguous or renamed package/asset | `fd` vs `fd-find` rejection, musl filename non-matches, arm64-vs-amd64 filtering, Feishin product-`linux`-arch and Moonfin Linux+version amd64 heuristics | CloverEye hyphen/name mismatch; bat musl internal identity `bat-musl`; operator Moonfin/Feishin installs | Keep exact user selection; do not promote hints to provenance |
 | Unsupported upstream tag/version | Epochs, `ubuntu1` and other distro suffixes, prereleases, and malformed tags stay unknown; numeric Debian revisions compare upstream-only; installed `+ds`/`+dfsg` upstream markers are ignored for `--check` | `github-desktop` build/tag mismatch still unknown; `spdx-licenses` `+ds` now comparable for the tag check only; lab epoch/`ubuntu` unknown | Broader comparison only with unambiguous mappings and regressions |
 | Interrupted or changed preparation | Deterministic fault injection in `tests/test_updates.py` for interrupted downloads, storage failures, changed URLs/checksums, and modified bytes | None required for CI; live mutation of third-party releases is out of scope | Retain regressions; do not claim crash atomicity between filesystem writes and SQLite commits |
 | Full reviewed install path | Isolated APT suite and packaging gates | Operator-reported Kubuntu upgrades for `stopgrade`, `clover-eye`, and `moonfin` after v1.1.2 helper fix (summary; not a dated transcript) | Capture dated auditable records; never unattended installs |
@@ -358,7 +358,7 @@ because they appear in this list:
 | --- | --- | --- |
 | Broader release-tag version comparison | `github-desktop` still unknown; `spdx-licenses` `+ds` handled; epoch/`ubuntu` unknowns remain | Add formats only with unambiguous rules and offline regressions; keep unsupported tags unknown |
 | Optional `--check-all` | Multiple tracked packages on one host | **Done** as read-only summary with per-package soft failures; never auto-prepare or auto-install |
-| Slightly more flexible filename matching, or mark likely after successful inspect | Moonfin title-case / Feishin channel-style names | Exact asset selection and identity checks remain mandatory; do not treat filename hints as provenance |
+| Slightly more flexible filename matching, or mark likely after successful inspect | Moonfin title-case / Feishin channel-style names | **Done** for product-`linux`-arch and amd64-only product-`Linux`-version likely hints; post-inspect auto-likely and broader aliases remain out of scope; exact selection still mandatory |
 | Document version-comparison rules more prominently for operators | Operators need to know when `--check` says unknown vs when `--inspect` decides direction | **Done** for current behavior in [version comparison](../design/version-comparison.md); broader formats still backlog |
 | Homepage URL normalization (strip fragments such as `#readme`) | Caprine direct-homepage tier missed | **Done** for fragments only (`homepage_repository`); query strings still rejected; still no auto-confirm |
 | Non-GitHub vendor download providers | `discord-ptb` correct negative; Steam-style vendor homepages | Evaluation/design until source identity, redirects, and verification are defined |
