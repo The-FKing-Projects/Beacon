@@ -197,9 +197,12 @@ a numeric Debian revision: `0.8.1-1` versus `v0.8.2` reports a newer upstream
 release. These checks explicitly compare only the upstream version, not the
 Debian revision or a release asset's package version; equal upstream versions
 do not establish that the packages are identical or equally current. Epochs,
-distro-specific revisions such as `-1ubuntu1`, prereleases, and other tag
-formats are reported as unknown. Use `--inspect` for the selected asset's full
-Debian version comparison.
+distro-specific revisions such as `-1ubuntu1` or `+ds`, build-suffixed installed
+versions, prereleases, and other tag formats are reported as unknown. Use
+`--inspect` for the selected asset's full Debian version comparison.
+Operator-reported desktop examples and comparison rules are recorded in the
+[discovery cases](docs/research/discovery-test-cases.md#kubuntu-2604-beacon-v112-operator-reported-summary)
+(undated summary, not a dated qualification transcript).
 
 `--inspect` downloads the exact named asset from the tracked repository's
 latest stable release into a temporary directory, compares its package name,
@@ -360,13 +363,13 @@ not claims of new product scope.
 
 1. **Broader real-world evidence.** **Partial.** The
    [discovery cases](docs/research/discovery-test-cases.md)
-   now cover Beacon and CloverEye end-to-end workflows, bat/fd-find
-   available-package observations, and offline fixtures derived from those
-   cases. Live installed standalone `.deb` evidence beyond Beacon and
-   CloverEye is still limited. Continue expanding dated observations for
-   identity, source evidence, version comparison, asset selection, and
-   verification limits; keep live GitHub checks separate from deterministic
-   CI.
+   now cover Beacon and CloverEye workflows, a Kubuntu 26.04 v1.1.2
+   operator-reported desktop summary with several standalone upgrades and
+   tracked packages, bat/fd-find available-package observations, and offline
+   fixtures. Continue
+   expanding dated observations for identity, source evidence, version
+   comparison, asset selection, and verification limits; keep live GitHub
+   checks separate from deterministic CI.
 2. **Better upstream suggestions.** **Partial.** `--suggest` prefers a direct
    GitHub homepage, warns when an exact-name candidate conflicts with that
    homepage, surfaces ties and alternatives, and never saves an association

@@ -1,11 +1,15 @@
 # Software Discovery Test Cases
 
 These fixtures reflect APT and dpkg metadata inspected on 2026-11-07, a
-user-provided Kubuntu 26.04.1 snapshot from 2026-11-08, and the available
-package metadata and public release inspections from 2026-11-13 below, along
-with explicit synthetic cases for source and package-state edge conditions. They exercise
+user-provided Kubuntu 26.04.1 snapshot from 2026-11-08, available package
+metadata and public release inspections from 2026-11-13/14, and an
+operator-reported Beacon v1.1.2 desktop summary on Kubuntu 26.04 (Beacon
+installed from the signed APT repository). Deterministic fixtures exercise
 package parsing without requiring network access or packages to be installed
-in the test environment.
+in the test environment. Dated live records (for example the 2026-11-10
+Beacon/CloverEye workflows and 2026-11-13/14 lab notes) are snapshots, not
+guarantees about future upstream releases. The Kubuntu v1.1.2 section below
+is an undated operator-reported summary, not a dated transcript.
 
 | Package | Observed evidence | Expected result |
 | --- | --- | --- |
@@ -241,44 +245,163 @@ available from a configured repository. Any repository version now blocks
 Beacon preparation before release selection or download; a locally installed
 newer version no longer hides APT's ability to manage the package.
 
+## Kubuntu 26.04: Beacon v1.1.2 operator-reported summary
+
+**Auditability note:** this is an operator-reported summary from a Kubuntu
+26.04 desktop running Beacon **v1.1.2** (signed APT install). It does **not**
+yet meet the dated live-case checklist below (observation date, per-package
+architecture, full command transcripts, and explicit verification limits are
+not recorded here). Treat outcomes as directional evidence for backlog
+prioritization, not as a fully auditable qualification transcript. A later
+pass can promote rows to dated records when those fields are captured.
+
+Packages below were described as standalone local `.deb` candidates (no
+configured APT/PPA origin for the installed version) unless noted. The
+operator reported the full local workflow:
+
+`beacon` → `--suggest` → `--track` → `--check` → `--inspect` → `--prepare` →
+`--install`
+
+Prepared artifacts were retained under `~/.local/share/beacon/updates/`.
+Installations used the reviewed APT handoff after the v1.1.2 packaged-helper
+fix for `/run` `noexec` staging. Digests and checksum matches below are
+integrity evidence only; they do **not** prove publisher authenticity.
+
+### Successful upgrades
+
+| Package | From → to | Notes |
+| --- | --- | --- |
+| `stopgrade` | `17.6.1` → `17.16.0` | First real third-party upgrade on this host; exposed the `/run` `noexec` helper bug fixed in v1.1.2 |
+| `clover-eye` | `0.1.1` → `0.1.3` | Clean install with large dependency transaction; exact `SHA256SUMS` entry and GitHub API digest both verified |
+| `moonfin` | `3.0.0` → `3.1.0` | Filename `Moonfin_Linux_v3.1.0.deb` was **not** marked a likely candidate (conservative heuristics); exact selection, inspect, prepare, and install still succeeded |
+
+### Tracked without upgrade (or not upgradable via Beacon)
+
+| Package | Observed check | Notes |
+| --- | --- | --- |
+| `caprine` | Current `2.61.0` | Homepage included a `#readme` fragment, so `--suggest` did not assign the “very high” direct-homepage tier; name search still surfaced the correct repository for manual confirmation |
+| `feishin` | Current `1.17.0` | Asset `Feishin-linux-amd64.deb` left **unverified** (no package-name match); conservative and correct |
+| `github-desktop` | Unknown comparison | Installed `3.7.1-build.50` versus tag `release-3.4.13-linux1`; release-tag comparison refused; assets not marked likely |
+| `spdx-licenses` | Unknown comparison; no `.deb` assets | Installed `3.27.0+ds-1` versus tag `v3.29.0`; Debian `+ds` revision outside supported rules; upstream release ships XML, not a Debian package |
+| `discord-ptb` | No usable upstream | Homepage `discord.com`; weak name-only search matches; correct negative — Beacon did not invent a GitHub updater path |
+
+### Confirmed working on this host
+
+- Local `.deb` candidate detection for standalone installs
+- GitHub homepage resolution (when the URL is an exact repository page), name search, and match ranking
+- Manual `--track` confirmation and persisted associations
+- `--check` reporting newer, matching, or explicitly unknown version comparisons
+- `--inspect` with GitHub API digest checks and optional exact `SHA256SUMS` entries
+- `--prepare` retention under `~/.local/share/beacon/updates/`
+- Reviewed APT transaction handoff and successful `--install` after the v1.1.2 helper fix
+
+### Observed limitations (do not weaken gates)
+
+- Release-tag version comparison remains narrow (see rules below)
+- Filename heuristics stay conservative; title-case or channel-style names often stay unverified until exact user selection
+- A homepage URL with a fragment (for example `#readme`) misses the direct “very high” homepage match even when the repository path is correct
+- No bulk `--check-all`; each association is checked individually
+- Tracking does not auto-update associations when upstreams rename or move
+
+These desktop installs are distinct from CI and from temporary-state lab
+cases. They still do not authorize unattended installation, non-GitHub
+providers, or treating digests as authenticity proofs.
+
+### Release-tag version comparison rules (operator summary)
+
+`--check` compares the installed package version to the latest stable release
+**tag**, not to the selected asset's Debian version:
+
+| Supported today | Remains unknown |
+| --- | --- |
+| Three-component numeric tags with optional `v` (example `v1.2.3`) | Epochs (example `3:…`) |
+| Installed numeric Debian revision only (example `1.2.3-1` vs `v1.2.4` compares upstream `1.2.3` to `1.2.4` and states the revision is not compared) | Distro or vendor suffixes (`-1ubuntu1`, `+ds`, build tags such as `3.7.1-build.50`) |
+| | Prereleases, non-numeric tags, or tags that are not exactly three numeric components |
+
+Equal upstream versions from `--check` do **not** mean the packages are
+identical. `--inspect` and `--prepare` both use the asset's full Debian
+version for direction and require an exact package-name match, but their
+architecture gates differ: `--inspect` accepts an asset architecture equal to
+the installed architecture **or** `all`; `--prepare` requires the asset
+architecture to equal the installed architecture exactly and therefore blocks
+an `all` asset when the installation is architecture-specific. Expanding the
+supported tag set is backlog work and needs unambiguous mappings plus offline
+regressions before any code change.
+
+## Supporting lab observations (2026-11-14)
+
+Read-only / temporary-state checks on an Ubuntu 24.04 amd64 lab host (no
+third-party package installations; temporary `XDG_STATE_HOME` only):
+
+| Case | Result |
+| --- | --- |
+| Installed `iputils-ping` with homepage `https://github.com/iputils/iputils/` | `--suggest` ranked the homepage repository **very high**; association saved only after explicit confirm in temp state; `--check` found tag `20250605` with **no** `.deb` assets and **unknown** version comparison for epoch/`ubuntu` installed version `3:20240117-1ubuntu0.1`; `--prepare` blocked because APT owns the package |
+| Installed `gh` (homepage `https://cli.github.com/`) | Homepage not a direct GitHub repository URL; name search returned many exact-name ties and warned that no single upstream was identified (official `cli/cli` not established by package-name search alone) |
+| Stale APT cache before `apt-get update` | Several Ubuntu packages briefly appeared as Local `.deb` Candidate; after refreshing lists they correctly classified as Ubuntu Repository — discovery depends on current policy metadata |
+| `sharkdp/bat` `v0.26.1` competing assets | `bat_0.26.1_amd64.deb` likely for `bat:amd64`; `bat-musl_0.26.1_musl-linux-amd64.deb` unverified by filename and inspects as internal package `bat-musl` / arch `musl-linux-amd64` |
+| `sindresorhus/caprine` `v2.61.0` | Temporary download: internal `caprine:amd64` `2.61.0`, no `SHA256SUMS`, GitHub API digest matched downloaded bytes; digest is not publisher authentication |
+| `The-FKing-Projects/Beacon` `v1.1.2` | Asset `beacon_1.1.2-1_all.deb` inspects as `beacon:all` `1.1.2-1`; release-tag compare treats `1.1.2-1` vs `v1.1.2` as matching upstream versions while ignoring the Debian revision; full Debian compare still sees `1.1.2-1` ≠ bare `1.1.2` |
+| Vendor download evaluation | `steam-installer` homepage points at Steam's site; no Discord GitHub release updater path found — keeps non-GitHub providers at evaluation only |
+
 ## Post-v1 qualification status
 
 v1.1.x turned several original backlog rows into offline regressions and
-limited live observations. Successful Beacon self-update and one third-party
-inspection still do not generalize; expand installed standalone cases rather
-than treating fixture coverage as finished live validation.
+dated live observations plus the undated Kubuntu 26.04 v1.1.2
+operator-reported summary above. Fixture coverage and one host's upgrades
+still do not generalize to every project; keep expanding cases rather than
+weakening confirmation or integrity gates.
 
 | Case | Offline / fixture coverage | Live observation | Still needed |
 | --- | --- | --- | --- |
-| Package with a direct GitHub homepage | Simulated installed `--suggest` coverage is for `fd-find` (homepage outranks a synthetic exact-name search hit; no auto-save). `bat` offline coverage is available-package provenance, release-tag/asset comparison, and filename matching — not a simulated installed suggestion flow | Available-package homepage metadata for `bat` and `fd` recorded; installed `--suggest` live paths for those packages were not run (packages were not installed) | More installed standalone packages whose homepage is an exact GitHub repository URL, with dated `--suggest` output and temporary tracking state |
-| Installed version also managed by APT | APT ownership blocks preparation when any policy version comes from a repository, including a newer local candidate over an older repo version | `bat` and `fd-find` available candidates classified as Ubuntu Repository | Additional installed packages that look local but remain APT-managed; confirm handoff refusal without changing host packages |
-| Ambiguous or renamed package/asset | `fd` vs `fd-find` rejection, musl filename non-matches, and arm64-vs-amd64 filtering | CloverEye filename vs package-name difference; `bat`/`fd` multi-asset releases | Further renamed or multi-asset projects; keep exact user selection and internal identity/architecture rejection |
-| Unsupported upstream tag/version | Epochs, `ubuntu1` and other distro suffixes, prereleases, and malformed tags stay unknown; numeric Debian revisions compare upstream-only | `bat`/`fd-find` release-tag comparisons correctly unknown for `ubuntu1` revisions; asset Debian comparison used for direction | Only add tag mappings when a real case shows an unambiguous interpretation; otherwise keep unknown |
+| Package with a direct GitHub homepage | Simulated installed `--suggest` coverage is for `fd-find` (homepage outranks a synthetic exact-name search hit; no auto-save). `bat` offline coverage is available-package provenance, release-tag/asset comparison, and filename matching — not a simulated installed suggestion flow | Kubuntu standalone workflow; lab `iputils-ping` very-high homepage rank; Caprine `#readme` homepage missed direct tier | More homepages with fragments/query strings; confirm ranking without auto-save |
+| Installed version also managed by APT | APT ownership blocks preparation when any policy version comes from a repository, including a newer local candidate over an older repo version | Lab `iputils-ping` prepare refused; `bat`/`fd-find`/`gh` Ubuntu Repository after fresh apt lists | Repeat handoff refusal on more APT-managed desktop packages |
+| Ambiguous or renamed package/asset | `fd` vs `fd-find` rejection, musl filename non-matches, and arm64-vs-amd64 filtering | Moonfin/Feishin conservative filenames; CloverEye hyphen/name mismatch; bat musl internal identity `bat-musl` | Keep exact user selection; optional post-inspect “likely” marking is backlog only |
+| Unsupported upstream tag/version | Epochs, `ubuntu1` and other distro suffixes, prereleases, and malformed tags stay unknown; numeric Debian revisions compare upstream-only | `github-desktop` build/tag mismatch unknown; `spdx-licenses` `+ds` unknown; lab epoch/`ubuntu` unknown | Broader comparison only with unambiguous mappings and regressions |
 | Interrupted or changed preparation | Deterministic fault injection in `tests/test_updates.py` for interrupted downloads, storage failures, changed URLs/checksums, and modified bytes | None required for CI; live mutation of third-party releases is out of scope | Retain regressions; do not claim crash atomicity between filesystem writes and SQLite commits |
+| Full reviewed install path | Isolated APT suite and packaging gates | Operator-reported Kubuntu upgrades for `stopgrade`, `clover-eye`, and `moonfin` after v1.1.2 helper fix (summary; not a dated transcript) | Capture dated auditable records; never unattended installs |
+
+## Follow-up backlog (docs only; not authorized work)
+
+Suggested product directions from the Kubuntu qualification. Recorded here so
+later PRs can pick them up deliberately; **do not** implement them solely
+because they appear in this list:
+
+| Direction | Motivation from cases | Constraint |
+| --- | --- | --- |
+| Broader release-tag version comparison | `github-desktop`, `spdx-licenses`, epoch/`+ds`/`ubuntu` unknowns | Add formats only with unambiguous rules and offline regressions; keep unsupported tags unknown |
+| Optional `--check-all` | Multiple tracked packages on one host | Must preserve per-association errors and never auto-prepare or auto-install |
+| Slightly more flexible filename matching, or mark likely after successful inspect | Moonfin title-case / Feishin channel-style names | Exact asset selection and identity checks remain mandatory; do not treat filename hints as provenance |
+| Document version-comparison rules more prominently for operators | Operators need to know when `--check` says unknown vs when `--inspect` decides direction | Documentation clarity only unless a rule is wrong |
+| Homepage URL normalization (strip fragments such as `#readme`) | Caprine direct-homepage tier missed | Tiny, test-backed change if pursued; still no auto-confirm |
+| Non-GitHub vendor download providers | `discord-ptb` correct negative; Steam-style vendor homepages | Evaluation/design until source identity, redirects, and verification are defined |
 
 ## Remaining live qualification sketches
 
-Conservative cases that can guide later suggestion and version-comparison
-work. These are documentation sketches, not implementation commitments, and
-they do not authorize new providers or automatic upstream confirmation.
+Cases still useful to expand later. Sketches already exercised on Kubuntu or
+in lab notes above are marked accordingly; they are not implementation
+commitments and do not authorize new providers or automatic upstream
+confirmation.
 
-| Proposed case | Why it helps | Guardrails |
+| Proposed case | Status | Guardrails |
 | --- | --- | --- |
-| Third-party installed local `.deb` with a direct GitHub homepage | Complements Beacon/CloverEye with homepage-ranked `--suggest` evidence on a real installed standalone package | Temporary `XDG_STATE_HOME`; confirm associations only in test state; do not install third-party updates on a developer host |
-| Competing glibc vs musl or multi-arch `.deb` assets for one release | Stresses filename hints versus internal package identity and architecture filtering | Exact asset selection only; reject identity/architecture mismatches; record what was not verified |
-| Upstream tag with prerelease or non-numeric Debian revision on the installed package | Confirms release-tag comparison stays unknown while `--inspect` still reports full Debian direction for a selected asset | No new version parser without an unambiguous mapping and offline regression |
-| Same upstream version, different Debian revision or rebuild | Separates upstream-tag equality from package identity; equal tags must not imply identical packages | Use selected asset metadata; do not treat tag match as install approval |
-| Vendor download-only updater (no GitHub release asset) | Evaluation input for whether a non-GitHub source can meet Beacon's identity and verification bar | Design/evaluation notes only until source identity, redirects, and artifact verification are defined; no provider implementation in this track |
-| Caprine-style same-version GitHub asset without `SHA256SUMS` | Revisits integrity messaging when versions match and only an unauthenticated download digest is available | Snapshot observation; no claim about future releases; unsigned digests are not publisher authentication |
+| Third-party installed local `.deb` with a direct GitHub homepage | **Exercised** on Kubuntu (Beacon workflow + several tracked apps) and lab `iputils-ping` | Temporary or explicit user state; no auto-confirm |
+| Competing glibc vs musl or multi-arch `.deb` assets | **Exercised** in lab for `bat` musl vs glibc; earlier arm64 notes retained | Exact selection; reject identity/architecture mismatches |
+| Upstream tag with prerelease or non-numeric Debian revision | **Exercised** via `github-desktop`, `spdx-licenses`, lab epoch/`ubuntu` | No new parser without unambiguous mapping + regression |
+| Same upstream version, different Debian revision or rebuild | **Exercised** via Beacon `1.1.2-1` vs tag `v1.1.2` metadata | Tag match ≠ package identity or install approval |
+| Vendor download-only updater (no GitHub release asset) | **Exercised** as correct negatives (`discord-ptb`; Steam-style evaluation) | Design/evaluation only; no provider implementation in this track |
+| Caprine-style same-version asset without `SHA256SUMS` | **Exercised** (Kubuntu current `2.61.0`; lab digest-only download) | Unsigned digests are not publisher authentication |
+| Homepage fragment / non-repository marketing URL | **Exercised** (Caprine `#readme`; `gh` → `cli.github.com`) | Prefer documenting before changing matcher behavior |
 
 For each new live case, record the observation date, package and architecture,
 command results, and what was and was not verified. Use temporary Beacon state
 and artifact directories so exploratory tracking does not alter normal user
-associations. Do not copy private metadata into fixtures; retain only the
-minimal public or synthetic inputs needed to reproduce the behavior.
+associations unless the operator intentionally uses their real profile. Do not
+copy private metadata into fixtures; retain only the minimal public or
+synthetic inputs needed to reproduce the behavior.
 
 Live inspection may download an explicitly selected public asset, but is not
-permission to install third-party packages on a developer's host. Exercise
+permission to install third-party packages on a developer's host. The Kubuntu
+installs above were the package owner's reviewed upgrades. Exercise
 installation failure and transaction cases with locally built fixture packages
 inside the existing isolated APT suite. Keep that evidence distinct from
 real-project metadata inspection and from the declared distro matrix.
