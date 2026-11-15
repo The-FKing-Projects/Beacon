@@ -95,13 +95,14 @@ class AptlyPublicationTest(unittest.TestCase):
                 self.assertIn("Expected a release tag", result.stderr)
                 self.assertEqual(calls, "")
 
-    def test_only_dispatch_is_registered_as_a_trigger(self):
+    def test_dispatch_and_release_published_are_registered_triggers(self):
         triggers = WORKFLOW.read_text().split("on:\n", 1)[1].split("\npermissions:", 1)[0]
         self.assertEqual(
             [line.strip() for line in triggers.splitlines() if line.startswith("  ")
              and not line.startswith("   ")],
-            ["workflow_dispatch:"],
+            ["workflow_dispatch:", "release:"],
         )
+        self.assertIn("types: [published]", triggers)
 
     def test_targets_existing_organization_runner_labels(self):
         labels = WORKFLOW.read_text().split("    runs-on:\n", 1)[1].split(
@@ -112,21 +113,40 @@ class AptlyPublicationTest(unittest.TestCase):
             ["- self-hosted", "- Linux", "- X64", "- fkingprojects"],
         )
 
+    def test_publishes_from_release_published_tag_ref(self):
+        result, calls = self.run_publication(
+            EVENT_NAME="release",
+            WORKFLOW_REF="refs/tags/v1.2.3",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("aptly repo add fkingprojects ", calls)
+        self.assertIn(
+            "aptly publish update -batch=true -skip-signing=false stable .\n",
+            calls,
+        )
+
     def test_rejects_untrusted_events_and_forks_before_download(self):
         contexts = [
-            {"EVENT_NAME": event}
+            ({"EVENT_NAME": event}, "Unsupported event")
             for event in ("pull_request", "pull_request_target", "issue_comment",
                           "push", "workflow_call", "workflow_run")
         ] + [
-            {"GITHUB_REPOSITORY": "fork-owner/Beacon"},
-            {"WORKFLOW_REF": "refs/heads/untrusted"},
-            {"WORKFLOW_REF": "refs/tags/v1.2.3"},
+            ({"GITHUB_REPOSITORY": "fork-owner/Beacon"}, "limited to The-FKing-Projects/Beacon"),
+            ({"WORKFLOW_REF": "refs/heads/untrusted"}, "workflow_dispatch on main"),
+            (
+                {"EVENT_NAME": "workflow_dispatch", "WORKFLOW_REF": "refs/tags/v1.2.3"},
+                "workflow_dispatch on main",
+            ),
+            (
+                {"EVENT_NAME": "release", "WORKFLOW_REF": "refs/heads/main"},
+                "vMAJOR.MINOR.PATCH tag ref",
+            ),
         ]
-        for context in contexts:
+        for context, expected in contexts:
             with self.subTest(context=context):
                 result, calls = self.run_publication(**context)
                 self.assertNotEqual(result.returncode, 0)
-                self.assertIn("requires workflow_dispatch", result.stderr)
+                self.assertIn(expected, result.stderr)
                 self.assertEqual(calls, "")
 
     def test_rejects_mismatched_metadata_before_repository_mutation(self):
