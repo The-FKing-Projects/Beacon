@@ -162,6 +162,8 @@ def suggest(package):
             search_terms.append(alias)
 
     incomplete = False
+    # Accumulate across package + alias queries so the truncation warning
+    # describes every search page being presented, not only the largest one.
     total_count = 0
     shown = 0
     for term in search_terms:
@@ -169,8 +171,8 @@ def suggest(package):
         data = tracking.github_get(f"/search/repositories?q={query}&per_page=30")
         items, count, page_incomplete = _merge_search_page(name, data, candidates)
         incomplete = incomplete or page_incomplete
-        total_count = max(total_count, count)
-        shown = max(shown, len(items))
+        total_count += count
+        shown += len(items)
 
     print(f"Package: {name}:{architecture}")
     print(f"Package homepage: {homepage or '(not provided)'}")

@@ -185,8 +185,10 @@ class SuggestionsTest(unittest.TestCase):
         # Prefer false negatives: shorter package must not inherit a longer repo name.
         self.assertEqual(suggestions.name_evidence("dust", "bootandy/du-dust")[0], 0)
         self.assertEqual(suggestions.name_evidence("delta", "dandavison/git-delta")[0], 0)
-        # Undocumented short tokens stay search-only.
+        # Documented short alias still ranks low; undocumented short tokens stay
+        # search-only (token length < 3 without an alias table entry).
         self.assertEqual(suggestions.name_evidence("fd-find", "owner/fd")[0], 1)
+        self.assertEqual(suggestions.name_evidence("tool-fd", "owner/fd")[0], 0)
         self.assertEqual(suggestions.name_evidence("ab-cd", "owner/cd")[0], 0)
 
     def test_hyphen_token_similarity_requires_full_token(self):
@@ -227,7 +229,7 @@ class SuggestionsTest(unittest.TestCase):
 
         result = out.getvalue()
         self.assertEqual(
-            [call.args[0] for call in github.call_args_list],
+            [request.args[0] for request in github.call_args_list],
             [
                 "/search/repositories?q=git-delta%20in%3Aname&per_page=30",
                 "/search/repositories?q=delta%20in%3Aname&per_page=30",
@@ -240,6 +242,26 @@ class SuggestionsTest(unittest.TestCase):
         self.assertEqual(result.count("Match: Low:"), 2)
         self.assertNotIn("Match: High:", result)
         self.assertIn("Nothing was saved.", result)
+
+    def test_multi_query_truncation_warning_sums_search_pages(self):
+        search_package = {
+            "items": [repo("other/git-delta-docs", 1)],
+            "total_count": 100,
+            "incomplete_results": False,
+        }
+        search_alias = {
+            "items": [repo("dandavison/delta", 2)],
+            "total_count": 2,
+            "incomplete_results": False,
+        }
+        out = io.StringIO()
+        with patch("tracking.installed_package",
+                   return_value=("git-delta", "amd64", "0.20.1")), \
+             patch("suggestions.package_homepage", return_value=""), \
+             patch("tracking.github_get", side_effect=[search_package, search_alias]), \
+             contextlib.redirect_stdout(out):
+            suggestions.suggest("git-delta")
+        self.assertIn("showing only the first 2 of 102 search results", out.getvalue())
 
     def test_du_dust_alias_preserves_homepage_preference_and_conflict(self):
         direct = repo("bootandy/dust", 10)
