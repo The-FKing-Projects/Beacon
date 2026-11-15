@@ -300,7 +300,7 @@ integrity evidence only; they do **not** prove publisher authenticity.
 - Release-tag version comparison remains narrow (see rules below)
 - Filename heuristics stay conservative; title-case or channel-style names often stay unverified until exact user selection
 - Homepage query strings and non-repository marketing URLs still miss the direct homepage tier; fragments such as `#readme` are ignored for matching
-- No bulk `--check-all`; each association is checked individually
+- `--check-all` summarizes every tracked association read-only; it never prepares or installs
 - Tracking does not auto-update associations when upstreams rename or move
 
 These desktop installs are distinct from CI and from temporary-state lab
@@ -357,7 +357,7 @@ because they appear in this list:
 | Direction | Motivation from cases | Constraint |
 | --- | --- | --- |
 | Broader release-tag version comparison | `github-desktop` still unknown; `spdx-licenses` `+ds` handled; epoch/`ubuntu` unknowns remain | Add formats only with unambiguous rules and offline regressions; keep unsupported tags unknown |
-| Optional `--check-all` | Multiple tracked packages on one host | Must preserve per-association errors and never auto-prepare or auto-install |
+| Optional `--check-all` | Multiple tracked packages on one host | **Done** as read-only summary with per-package soft failures; never auto-prepare or auto-install |
 | Slightly more flexible filename matching, or mark likely after successful inspect | Moonfin title-case / Feishin channel-style names | Exact asset selection and identity checks remain mandatory; do not treat filename hints as provenance |
 | Document version-comparison rules more prominently for operators | Operators need to know when `--check` says unknown vs when `--inspect` decides direction | **Done** for current behavior in [version comparison](../design/version-comparison.md); broader formats still backlog |
 | Homepage URL normalization (strip fragments such as `#readme`) | Caprine direct-homepage tier missed | **Done** for fragments only (`homepage_repository`); query strings still rejected; still no auto-confirm |
