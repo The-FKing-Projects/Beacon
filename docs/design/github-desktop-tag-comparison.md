@@ -83,10 +83,12 @@ qualification; not an operator desktop transcript):
    takeover — another reason not to paper over `--check` noise with a
    repository profile that operators might treat as update approval.
 
-**Gate result:** Keep forever-unknown for these shapes under
+**Gate result:** Keep these shapes **unknown by default** under
 `tracking.compare_versions` until a future, Dennis-reviewed profile supplies
 publisher scope, bidirectional mapping, counterexample-safe behavior, operator
 copy, and offline fixtures — still separate from any CLI/APT-gate change.
+(Unknown is the standing product answer; the reopening path is that gate, not
+a permanent ban on ever reconsidering a scoped profile.)
 
 **What would reopen a publisher profile:** complete every Decision gate item
 below for one named repository id, with new dated tag/asset/Debian-version
