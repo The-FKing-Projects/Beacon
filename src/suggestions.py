@@ -1,10 +1,28 @@
 """Read-only GitHub repository suggestions for installed packages."""
 
-import re
 import subprocess
 from urllib.parse import quote, urlparse
 
 import tracking
+
+
+# Documented Debian/Ubuntu package → GitHub repository-name aliases from the
+# 2026-11-15 discovery survey (docs/research/discovery-test-cases.md). Used only
+# for extra name-search queries and low-tier evidence. Prefer false negatives:
+# do not invent associations beyond these labeled cases. Never auto-track.
+DOCUMENTED_PACKAGE_ALIASES = {
+    "git-delta": ("delta",),
+    "du-dust": ("dust",),
+    "fd-find": ("fd",),
+}
+
+
+def normalize_name(value):
+    return value.lower().replace("_", "-")
+
+
+def documented_aliases(package):
+    return DOCUMENTED_PACKAGE_ALIASES.get(normalize_name(package), ())
 
 
 def package_homepage(name, architecture):
@@ -71,11 +89,24 @@ def parse_candidate(data):
 
 def name_evidence(package, repository):
     repo_name = repository.split("/", 1)[1]
-    normalize = lambda value: value.lower().replace("_", "-")
-    if normalize(package) == normalize(repo_name):
+    pkg = normalize_name(package)
+    repo = normalize_name(repo_name)
+    if pkg == repo:
         return 2, "package and repository names match (case and -/_ normalized)"
-    if normalize(package).replace("-", "") == normalize(repo_name).replace("-", ""):
+    if pkg.replace("-", "") == repo.replace("-", ""):
         return 1, "package and repository names are similar with separators removed"
+    aliases = documented_aliases(pkg)
+    if repo in aliases:
+        return 1, "documented package/repository name alias from discovery cases"
+    # Conservative packaging-style token match: repository name equals a full
+    # hyphen-delimited token of the longer package name (e.g. git-delta → delta).
+    # Require token length ≥ 3 and never treat the reverse (shorter package /
+    # longer repo) as evidence — prefer false negatives.
+    pkg_tokens = [token for token in pkg.split("-") if token]
+    if len(repo) >= 3 and repo in pkg_tokens and pkg != repo:
+        return 1, (
+            "package name includes the repository name as a hyphen-delimited token"
+        )
     return 0, "returned by GitHub name search; no exact package-name match"
 
 
@@ -87,6 +118,29 @@ def match_tier(rank):
         0: "Candidate only: search result without independent identity evidence",
     }
     return tiers[rank]
+
+
+def _merge_search_page(name, data, candidates):
+    items = data.get("items")
+    count = data.get("total_count")
+    incomplete = data.get("incomplete_results")
+    if (not isinstance(items, list) or not isinstance(count, int) or isinstance(count, bool)
+            or count < 0 or not isinstance(incomplete, bool)):
+        raise tracking.TrackingError("GitHub returned invalid search results.")
+    for item in items:
+        candidate = parse_candidate(item)
+        rank, evidence = name_evidence(name, candidate["name"])
+        if candidate["id"] in candidates:
+            existing = candidates[candidate["id"]]
+            if evidence not in existing["evidence"]:
+                existing["evidence"].append(evidence)
+            if rank > existing["rank"] and existing["rank"] < 3:
+                existing["rank"] = rank
+        else:
+            candidate["rank"] = rank
+            candidate["evidence"] = [evidence]
+            candidates[candidate["id"]] = candidate
+    return items, count, incomplete
 
 
 def suggest(package):
@@ -102,23 +156,21 @@ def suggest(package):
         candidates[candidate["id"]] = candidate
         homepage_candidate_id = candidate["id"]
 
-    query = quote(f"{name} in:name", safe="")
-    data = tracking.github_get(f"/search/repositories?q={query}&per_page=30")
-    items = data.get("items")
-    count = data.get("total_count")
-    incomplete = data.get("incomplete_results")
-    if (not isinstance(items, list) or not isinstance(count, int) or isinstance(count, bool)
-            or count < 0 or not isinstance(incomplete, bool)):
-        raise tracking.TrackingError("GitHub returned invalid search results.")
-    for item in items:
-        candidate = parse_candidate(item)
-        rank, evidence = name_evidence(name, candidate["name"])
-        if candidate["id"] in candidates:
-            candidates[candidate["id"]]["evidence"].append(evidence)
-        else:
-            candidate["rank"] = rank
-            candidate["evidence"] = [evidence]
-            candidates[candidate["id"]] = candidate
+    search_terms = [name]
+    for alias in documented_aliases(name):
+        if normalize_name(alias) != normalize_name(name) and alias not in search_terms:
+            search_terms.append(alias)
+
+    incomplete = False
+    total_count = 0
+    shown = 0
+    for term in search_terms:
+        query = quote(f"{term} in:name", safe="")
+        data = tracking.github_get(f"/search/repositories?q={query}&per_page=30")
+        items, count, page_incomplete = _merge_search_page(name, data, candidates)
+        incomplete = incomplete or page_incomplete
+        total_count = max(total_count, count)
+        shown = max(shown, len(items))
 
     print(f"Package: {name}:{architecture}")
     print(f"Package homepage: {homepage or '(not provided)'}")
@@ -127,8 +179,8 @@ def suggest(package):
     print("GitHub search results are suggestions, not proof of upstream identity.")
     if incomplete:
         print("Warning: GitHub reported incomplete search results.")
-    if count > len(items):
-        print(f"Warning: showing only the first {len(items)} of {count} search results.")
+    if total_count > shown:
+        print(f"Warning: showing only the first {shown} of {total_count} search results.")
     if not candidates:
         print("No candidates found; this does not prove that no upstream exists.")
         return

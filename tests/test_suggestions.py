@@ -83,16 +83,21 @@ class SuggestionsTest(unittest.TestCase):
 
     def test_fd_find_homepage_outweighs_a_synthetic_exact_name_search_match(self):
         direct = repo("sharkdp/fd", 90793418)
-        search = {
+        search_package = {
             "items": [repo("example/fd-find", 1), direct],
             "total_count": 2, "incomplete_results": False,
+        }
+        search_alias = {
+            "items": [direct],
+            "total_count": 1, "incomplete_results": False,
         }
         out = io.StringIO()
         with patch("tracking.installed_package",
                    return_value=("fd-find", "amd64", "10.3.0-2ubuntu1")), \
              patch("suggestions.package_homepage",
                    return_value="https://github.com/sharkdp/fd"), \
-             patch("tracking.github_get", side_effect=[direct, search]), \
+             patch("tracking.github_get",
+                   side_effect=[direct, search_package, search_alias]), \
              patch("tracking.open_database", side_effect=AssertionError("must not open store")), \
              contextlib.redirect_stdout(out):
             suggestions.suggest("fd-find")
@@ -162,11 +167,113 @@ class SuggestionsTest(unittest.TestCase):
         self.assertIn("similar", evidence)
         self.assertEqual(suggestions.name_evidence("clover_eye", "owner/clover-eye")[0], 2)
 
+    def test_documented_alias_name_evidence_is_low_tier_only(self):
+        cases = (
+            ("git-delta", "dandavison/delta", "documented"),
+            ("du-dust", "bootandy/dust", "documented"),
+            ("fd-find", "sharkdp/fd", "documented"),
+            ("git_delta", "owner/delta", "documented"),
+        )
+        for package, repository, needle in cases:
+            with self.subTest(package=package, repository=repository):
+                rank, evidence = suggestions.name_evidence(package, repository)
+                self.assertEqual(rank, 1)
+                self.assertIn(needle, evidence)
+
+        # Exact names stay high; bottom needs no alias.
+        self.assertEqual(suggestions.name_evidence("bottom", "ClementTsang/bottom")[0], 2)
+        # Prefer false negatives: shorter package must not inherit a longer repo name.
+        self.assertEqual(suggestions.name_evidence("dust", "bootandy/du-dust")[0], 0)
+        self.assertEqual(suggestions.name_evidence("delta", "dandavison/git-delta")[0], 0)
+        # Undocumented short tokens stay search-only.
+        self.assertEqual(suggestions.name_evidence("fd-find", "owner/fd")[0], 1)
+        self.assertEqual(suggestions.name_evidence("ab-cd", "owner/cd")[0], 0)
+
+    def test_hyphen_token_similarity_requires_full_token(self):
+        rank, evidence = suggestions.name_evidence("tool-helper", "owner/helper")
+        self.assertEqual(rank, 1)
+        self.assertIn("hyphen-delimited token", evidence)
+        self.assertEqual(suggestions.name_evidence("toolhelper", "owner/helper")[0], 0)
+        self.assertEqual(suggestions.name_evidence("helper-extra", "owner/helper")[0], 1)
+
     def test_match_tiers_distinguish_direct_exact_similar_and_search_only(self):
         self.assertIn("homepage directly identifies", suggestions.match_tier(3))
         self.assertIn("names match", suggestions.match_tier(2))
         self.assertIn("similar names only", suggestions.match_tier(1))
         self.assertIn("without independent identity evidence", suggestions.match_tier(0))
+
+    def test_git_delta_alias_search_ranks_delta_without_saving(self):
+        search_package = {
+            "items": [repo("unrelated/git-delta-docs", 2)],
+            "total_count": 1,
+            "incomplete_results": False,
+        }
+        search_alias = {
+            "items": [
+                repo("dandavison/delta", 1, description="A syntax-highlighting pager for git"),
+                repo("other/delta", 3),
+            ],
+            "total_count": 2,
+            "incomplete_results": False,
+        }
+        out = io.StringIO()
+        with patch("tracking.installed_package",
+                   return_value=("git-delta", "amd64", "0.20.1")), \
+             patch("suggestions.package_homepage", return_value=""), \
+             patch("tracking.github_get", side_effect=[search_package, search_alias]) as github, \
+             patch("tracking.open_database", side_effect=AssertionError("must not open store")), \
+             contextlib.redirect_stdout(out):
+            suggestions.suggest("git-delta")
+
+        result = out.getvalue()
+        self.assertEqual(
+            [call.args[0] for call in github.call_args_list],
+            [
+                "/search/repositories?q=git-delta%20in%3Aname&per_page=30",
+                "/search/repositories?q=delta%20in%3Aname&per_page=30",
+            ],
+        )
+        self.assertIn("https://github.com/dandavison/delta", result)
+        self.assertIn("Match: Low:", result)
+        self.assertIn("documented package/repository name alias", result)
+        self.assertIn("multiple repositories share the strongest match evidence", result)
+        self.assertEqual(result.count("Match: Low:"), 2)
+        self.assertNotIn("Match: High:", result)
+        self.assertIn("Nothing was saved.", result)
+
+    def test_du_dust_alias_preserves_homepage_preference_and_conflict(self):
+        direct = repo("bootandy/dust", 10)
+        search_package = {
+            "items": [repo("example/du-dust", 20)],
+            "total_count": 1,
+            "incomplete_results": False,
+        }
+        search_alias = {
+            "items": [direct, repo("example/dust", 30)],
+            "total_count": 2,
+            "incomplete_results": False,
+        }
+        out = io.StringIO()
+        with patch("tracking.installed_package",
+                   return_value=("du-dust", "amd64", "1.2.7-1")), \
+             patch("suggestions.package_homepage",
+                   return_value="https://github.com/bootandy/dust"), \
+             patch("tracking.github_get",
+                   side_effect=[direct, search_package, search_alias]), \
+             patch("tracking.open_database", side_effect=AssertionError("must not open store")), \
+             contextlib.redirect_stdout(out):
+            suggestions.suggest("du-dust")
+
+        result = out.getvalue()
+        self.assertLess(result.index("https://github.com/bootandy/dust\n"),
+                        result.index("https://github.com/example/du-dust\n"))
+        self.assertIn("Match: Very high:", result)
+        self.assertIn("Match: High:", result)
+        self.assertIn(
+            "exact package-name match points to a different repository",
+            result,
+        )
+        self.assertIn("Nothing was saved.", result)
 
     def test_multiple_exact_name_candidates_are_marked_ambiguous(self):
         search = {
