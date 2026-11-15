@@ -1,3 +1,9 @@
+beacon (1.2.1-1) unstable; urgency=medium
+
+  * Release for pull request #56: fix: expand discovery cases + LocalSend/gh filename hints.
+
+ -- The FK'ing Projects <FiendKing04@gmail.com>  Sun, 15 Nov 2026 01:33:04 +0000
+
 beacon (1.2.0-1) unstable; urgency=medium
 
   * Release for pull request #53: feat: auto-publish aptly on GitHub Release published.
