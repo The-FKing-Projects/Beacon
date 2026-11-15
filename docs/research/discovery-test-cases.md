@@ -2,14 +2,15 @@
 
 These fixtures reflect APT and dpkg metadata inspected on 2026-11-07, a
 user-provided Kubuntu 26.04.1 snapshot from 2026-11-08, available package
-metadata and public release inspections from 2026-11-13/14, and an
-operator-reported Beacon v1.1.2 desktop summary on Kubuntu 26.04 (Beacon
-installed from the signed APT repository). Deterministic fixtures exercise
-package parsing without requiring network access or packages to be installed
-in the test environment. Dated live records (for example the 2026-11-10
-Beacon/CloverEye workflows and 2026-11-13/14 lab notes) are snapshots, not
-guarantees about future upstream releases. The Kubuntu v1.1.2 section below
-is an undated operator-reported summary, not a dated transcript.
+metadata and public release inspections from 2026-11-13/14 and 2026-11-15,
+and an operator-reported Beacon v1.1.2 desktop summary on Kubuntu 26.04
+(Beacon installed from the signed APT repository). Deterministic fixtures
+exercise package parsing without requiring network access or packages to be
+installed in the test environment. Dated live records (for example the
+2026-11-10 Beacon/CloverEye workflows and 2026-11-13/15 lab notes) are
+snapshots, not guarantees about future upstream releases. The Kubuntu
+v1.1.2 section below is an undated operator-reported summary, not a dated
+transcript.
 
 | Package | Observed evidence | Expected result |
 | --- | --- | --- |
@@ -300,7 +301,7 @@ integrity evidence only; they do **not** prove publisher authenticity.
 ### Observed limitations (do not weaken gates)
 
 - Release-tag version comparison remains narrow (see rules below)
-- Filename heuristics stay conservative: product-`linux`-arch and amd64-only product-`Linux`-version names can mark likely; musl/wrong-arch/wrong-product names stay unverified; exact selection is still required
+- Filename heuristics stay conservative: product-`linux`-arch, amd64-only product-`Linux`-version, LocalSend-style `x86-64`/`arm-64`, and `gh`-style underscore version_linux names can mark likely; musl/wrong-arch/wrong-product names stay unverified; exact selection is still required
 - Homepage query strings and non-repository marketing URLs still miss the direct homepage tier; fragments such as `#readme` are ignored for matching
 - `--check-all` summarizes every tracked association read-only; it never prepares or installs
 - Tracking does not auto-update associations when upstreams rename or move
@@ -345,8 +346,8 @@ weakening confirmation or integrity gates.
 | --- | --- | --- | --- |
 | Package with a direct GitHub homepage | Simulated installed `--suggest` coverage is for `fd-find` (homepage outranks a synthetic exact-name search hit; no auto-save) and Caprine-style `#readme` fragment stripping. `bat` offline coverage is available-package provenance, release-tag/asset comparison, and filename matching — not a simulated installed suggestion flow | Kubuntu standalone workflow; lab `iputils-ping` very-high homepage rank; Caprine `#readme` was an operator miss before fragment stripping | Query-string homepages remain unsupported; confirm ranking without auto-save |
 | Installed version also managed by APT | APT ownership blocks preparation when any policy version comes from a repository, including a newer local candidate over an older repo version | Lab `iputils-ping` prepare refused; `bat`/`fd-find`/`gh` Ubuntu Repository after fresh apt lists | Repeat handoff refusal on more APT-managed desktop packages |
-| Ambiguous or renamed package/asset | `fd` vs `fd-find` rejection, musl filename non-matches, arm64-vs-amd64 filtering, Feishin product-`linux`-arch and Moonfin Linux+version amd64 heuristics | CloverEye hyphen/name mismatch; bat musl internal identity `bat-musl`; operator Moonfin/Feishin installs | Keep exact user selection; do not promote hints to provenance |
-| Unsupported upstream tag/version | Epochs, `ubuntu1` and other distro suffixes, prereleases, and malformed tags stay unknown; numeric Debian revisions compare upstream-only; installed `+ds`/`+dfsg` upstream markers are ignored for `--check` | `github-desktop` build/tag mismatch still unknown; `spdx-licenses` `+ds` now comparable for the tag check only; lab epoch/`ubuntu` unknown | Broader comparison only with unambiguous mappings and regressions |
+| Ambiguous or renamed package/asset | `fd` vs `fd-find` rejection, musl filename non-matches, arm64-vs-amd64 filtering, Feishin product-`linux`-arch, Moonfin Linux+version amd64, LocalSend `x86-64`/`arm-64`, and `gh` underscore version_linux heuristics | CloverEye hyphen/name mismatch; bat/bottom musl; operator Moonfin/Feishin; 2026-11-15 `git-delta`/`du-dust` name separation | Keep exact user selection; do not promote hints to provenance |
+| Unsupported upstream tag/version | Epochs, `ubuntu1` and other distro suffixes, prereleases, and malformed tags stay unknown; numeric Debian revisions compare upstream-only; installed `+ds`/`+dfsg` upstream markers are ignored for `--check` | `github-desktop` build/tag mismatch still unknown; `spdx-licenses` `+ds` now comparable for the tag check only; lab epoch/`ubuntu` unknown; LocalSend `+64` and Helix `25.07.1` correctly unknown | Broader comparison only with unambiguous mappings and regressions |
 | Interrupted or changed preparation | Deterministic fault injection in `tests/test_updates.py` for interrupted downloads, storage failures, changed URLs/checksums, and modified bytes | None required for CI; live mutation of third-party releases is out of scope | Retain regressions; do not claim crash atomicity between filesystem writes and SQLite commits |
 | Full reviewed install path | Isolated APT suite and packaging gates | Operator-reported Kubuntu upgrades for `stopgrade`, `clover-eye`, and `moonfin` after v1.1.2 helper fix (summary; not a dated transcript) | Capture dated auditable records; never unattended installs |
 
@@ -360,7 +361,7 @@ because they appear in this list:
 | --- | --- | --- |
 | Broader release-tag version comparison | `github-desktop` still unknown; `spdx-licenses` `+ds` handled; epoch/`ubuntu` unknowns remain | **Design note** for Desktop-style tags in [github-desktop-tag-comparison](../design/github-desktop-tag-comparison.md); no parser expansion until that decision gate passes; keep unsupported tags unknown |
 | Optional `--check-all` | Multiple tracked packages on one host | **Done** as read-only summary with per-package soft failures; never auto-prepare or auto-install |
-| Slightly more flexible filename matching, or mark likely after successful inspect | Moonfin title-case / Feishin channel-style names | **Done** for product-`linux`-arch and amd64-only product-`Linux`-version likely hints; post-inspect auto-likely and broader aliases remain out of scope; exact selection still mandatory |
+| Slightly more flexible filename matching, or mark likely after successful inspect | Moonfin title-case / Feishin channel-style names; LocalSend `x86-64`/`arm-64`; `gh` underscores | **Done** for product-`linux`-arch, amd64-only product-`Linux`-version, LocalSend hyphenated arch aliases, and post-`linux` version peel; post-inspect auto-likely and broader aliases remain out of scope; exact selection still mandatory |
 | Document version-comparison rules more prominently for operators | Operators need to know when `--check` says unknown vs when `--inspect` decides direction | **Done** for current behavior in [version comparison](../design/version-comparison.md); broader formats still backlog |
 | Homepage URL normalization (strip fragments such as `#readme`) | Caprine direct-homepage tier missed | **Done** for fragments only (`homepage_repository`); query strings still rejected; still no auto-confirm |
 | Non-GitHub vendor download providers | `discord-ptb` correct negative; Steam-style vendor homepages | **Evaluation doc** in [vendor download](../design/vendor-download.md); still no provider implementation until the decision gate passes |
@@ -372,12 +373,60 @@ this file was re-checked against `--suggest` / `homepage_repository`,
 `asset_match`, and the offline suggestion and filename fixtures. Evidence-backed
 GitHub-path polish from the Kubuntu and lab cases above (homepage `#fragment`
 stripping, installed `+ds`/`+dfsg` tag comparison, read-only `--check-all`,
-and Feishin/Moonfin-style likely filename hints) is already shipped. No further
-product change is authorized from current evidence: query-string homepages and
+and Feishin/Moonfin-style likely filename hints) is already shipped. The
+2026-11-15 public-release survey below justified one additional narrow
+filename fix (LocalSend `x86-64`/`arm-64` aliases and a second version peel
+after a `linux` token for `gh`-style underscores). Query-string homepages and
 `/releases` path stripping still lack an observed package case that justifies
 loosening the existing tests; `github-desktop` tag shapes and vendor-download
 providers stay design-only. Confirmation, exact asset selection,
 integrity≠authenticity, APT ownership gates, and isolation rules are unchanged.
+
+## Public GitHub `.deb` survey (2026-11-15)
+
+Read-only GitHub Releases API lookups plus temporary `dpkg-deb -f` inspection
+of selected public assets (no host installs; digests are download integrity
+only). Observation date: **2026-11-15 (UTC)**. These expand roadmap item 1
+with realistic filename, package-identity, and `--check` comparison shapes
+not already covered by Beacon/CloverEye/bat/fd/Feishin/Moonfin/github-desktop.
+
+| Upstream | Latest tag observed | Selected `.deb` asset(s) | Internal `Package` / `Version` / `Architecture` | Filename `asset_match` (amd64 unless noted) | `--check` if installed matched that shape |
+| --- | --- | --- | --- | --- | --- |
+| [`localsend/localsend`](https://github.com/localsend/localsend/releases/tag/v1.18.2) | `v1.18.2` | `LocalSend-1.18.2-linux-x86-64.deb`, `LocalSend-1.18.2-linux-arm-64.deb` | `localsend` / `1.18.2+64` / `amd64` (x86-64 asset inspected) | After the narrow alias fix: **likely** for matching arch; before the fix, `x86-64` was misread as `x86`→i386 (`Not suggested`) and `arm-64` stayed unrecognized | Installed `1.18.2+64` vs `v1.18.2` → **unknown** (`+64` is not `+ds`/`+dfsg`; do not broaden repack ignoring). Plain `1.18.1` vs `v1.18.2` would compare |
+| [`cli/cli`](https://github.com/cli/cli/releases/tag/v2.104.0) | `v2.104.0` | `gh_2.104.0_linux_amd64.deb` (also arm64/386/armv6) | `gh` / `2.104.0` / `amd64` | Underscore `name_VERSION_linux_ARCH`: **likely** after peeling version again post-`linux`; previously unverified. Package name is `gh`, not `cli` | Comparable (`2.100.0` vs `v2.104.0` → newer). Lab note still applies: homepage `cli.github.com` is not a direct repository URL |
+| [`helix-editor/helix`](https://github.com/helix-editor/helix/releases/tag/25.07.1) | `25.07.1` | `helix_25.7.1-1_amd64.deb` | `helix` / `25.7.1-1` / `amd64` | **Likely** (`helix` + amd64) | Tag `25.07.1` has a leading-zero component → **unknown** even though the asset version is `25.7.1-1`. Correct refusal; no parser change |
+| [`dandavison/delta`](https://github.com/dandavison/delta/releases/tag/0.20.1) | `0.20.1` (no `v`) | `git-delta_0.20.1_amd64.deb`; also `git-delta-musl_*` | `git-delta` / `0.20.1` / `amd64` | **Likely** only for package `git-delta`; `delta` and musl filenames stay **unverified** | Tag without `v` still comparable (`0.19.0` vs `0.20.1` → newer) |
+| [`bootandy/dust`](https://github.com/bootandy/dust/releases/tag/v1.2.7) | `v1.2.7` | `du-dust_1.2.7-1_amd64.deb` | `du-dust` / `1.2.7-1` / `amd64` | **Likely** for `du-dust`; package name `dust` is a **correct negative** (filename product token is `du-dust`) | `1.2.0-1` vs `v1.2.7` → newer upstream (revision ignored) |
+| [`ClementTsang/bottom`](https://github.com/ClementTsang/bottom/releases/tag/0.15.0) | `0.15.0` | `bottom_0.15.0-1_amd64.deb` vs `bottom-musl_0.15.0-1_amd64.deb` | `bottom` / `0.15.0-1` / `amd64` (glibc asset) | glibc asset **likely**; musl filename **unverified** (same bat-class guard) | No-`v` tag comparable with numeric Debian revision |
+
+Supporting positives already matching current heuristics (no new code needed;
+recorded for breadth):
+
+| Upstream | Tag | Asset note |
+| --- | --- | --- |
+| [`rclone/rclone`](https://github.com/rclone/rclone/releases/tag/v1.76.0) | `v1.76.0` | `rclone-v1.76.0-linux-amd64.deb` already **likely**; release ships `SHA256SUMS` (plus MD5/SHA1). `linux-386` stays unrecognized (no `386` arch alias — prefer false negative) |
+| [`topgrade-rs/topgrade`](https://github.com/topgrade-rs/topgrade/releases/tag/v17.16.0) | `v17.16.0` | `topgrade_17.16.0_amd64.deb` **likely** for package `topgrade`; Kubuntu operator package `stopgrade` remains a distinct identity (filename does not fold to `stopgrade`) |
+| [`BurntSushi/ripgrep`](https://github.com/BurntSushi/ripgrep/releases/tag/15.2.0) | `15.2.0` | `ripgrep_15.2.0-1_amd64.deb` → internal `ripgrep` / `15.2.0-1` / `amd64`; per-asset `.sha256` files, not a shared `SHA256SUMS` |
+| [`ajeetdsouza/zoxide`](https://github.com/ajeetdsouza/zoxide/releases/tag/v0.10.0) | `v0.10.0` | Classic `name_ver-rev_arch.deb`; comparable with numeric revision |
+
+Correct limitations reinforced by this survey (still **not** authorized work):
+
+- Do **not** treat arbitrary `+` suffixes (LocalSend `+64`) like `+ds`/`+dfsg`.
+- Do **not** strip leading zeros in release tags (Helix `25.07.1`) to force a compare.
+- Do **not** implement `github-desktop` `release-`/`-build` parsers or vendor-download providers from these cases.
+- Exact asset selection, integrity≠authenticity, and APT ownership gates unchanged.
+
+Observed download digests (integrity only; not publisher authentication):
+
+- `LocalSend-1.18.2-linux-x86-64.deb`: `cc42a4f3eacdcb25ec31f0016b1272acb003145ab30484db8965450e20c72cd2`
+- `gh_2.104.0_linux_amd64.deb`: `f90d578cbc4c3b067dfc4a1a540cef41faef64eebfb280b548ab32455977a21f`
+- `helix_25.7.1-1_amd64.deb`: `c9ff7ee3113f039c21c3ff31e8e2b71d1cc51a2c3e6c39face36e3cf25fe8788`
+- `git-delta_0.20.1_amd64.deb`: `0683067a4cbbcc19b9fd2841253131d1b37ccfa724725098d811d4d0d9fcc25b`
+- `du-dust_1.2.7-1_amd64.deb`: `84217d34c4ef92ced959781d16bda64344c2795fad735267378be1652d0a019f`
+- `bottom_0.15.0-1_amd64.deb`: `02aabca9cd9dd41d3fbf3642e96b5a7b266027fd0ba9eb78a96e4c5eeabcd8c8`
+
+Offline regressions for the LocalSend and `gh` filename shapes live in
+`tests/filename_match_fixtures.py` / `tests/test_tracking.py`.
 
 ## Remaining live qualification sketches
 
