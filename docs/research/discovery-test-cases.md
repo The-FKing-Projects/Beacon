@@ -356,7 +356,7 @@ because they appear in this list:
 
 | Direction | Motivation from cases | Constraint |
 | --- | --- | --- |
-| Broader release-tag version comparison | `github-desktop` still unknown; `spdx-licenses` `+ds` handled; epoch/`ubuntu` unknowns remain | Add formats only with unambiguous rules and offline regressions; keep unsupported tags unknown |
+| Broader release-tag version comparison | `github-desktop` still unknown; `spdx-licenses` `+ds` handled; epoch/`ubuntu` unknowns remain | **Design note** for Desktop-style tags in [github-desktop-tag-comparison](../design/github-desktop-tag-comparison.md); no parser expansion until that decision gate passes; keep unsupported tags unknown |
 | Optional `--check-all` | Multiple tracked packages on one host | **Done** as read-only summary with per-package soft failures; never auto-prepare or auto-install |
 | Slightly more flexible filename matching, or mark likely after successful inspect | Moonfin title-case / Feishin channel-style names | **Done** for product-`linux`-arch and amd64-only product-`Linux`-version likely hints; post-inspect auto-likely and broader aliases remain out of scope; exact selection still mandatory |
 | Document version-comparison rules more prominently for operators | Operators need to know when `--check` says unknown vs when `--inspect` decides direction | **Done** for current behavior in [version comparison](../design/version-comparison.md); broader formats still backlog |
