@@ -365,6 +365,20 @@ because they appear in this list:
 | Homepage URL normalization (strip fragments such as `#readme`) | Caprine direct-homepage tier missed | **Done** for fragments only (`homepage_repository`); query strings still rejected; still no auto-confirm |
 | Non-GitHub vendor download providers | `discord-ptb` correct negative; Steam-style vendor homepages | **Evaluation doc** in [vendor download](../design/vendor-download.md); still no provider implementation until the decision gate passes |
 
+### Post-v1.2.0 GitHub-path cross-check
+
+After [v1.2.0](https://github.com/The-FKing-Projects/Beacon/releases/tag/v1.2.0),
+this file was re-checked against `--suggest` / `homepage_repository`,
+`asset_match`, and the offline suggestion and filename fixtures. Evidence-backed
+GitHub-path polish from the Kubuntu and lab cases above (homepage `#fragment`
+stripping, installed `+ds`/`+dfsg` tag comparison, read-only `--check-all`,
+and Feishin/Moonfin-style likely filename hints) is already shipped. No further
+product change is authorized from current evidence: query-string homepages and
+`/releases` path stripping still lack an observed package case that justifies
+loosening the existing tests; `github-desktop` tag shapes and vendor-download
+providers stay design-only. Confirmation, exact asset selection,
+integrity≠authenticity, APT ownership gates, and isolation rules are unchanged.
+
 ## Remaining live qualification sketches
 
 Cases still useful to expand later. Sketches already exercised on Kubuntu or
