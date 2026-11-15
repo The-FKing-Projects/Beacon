@@ -10,7 +10,9 @@ update to APT.
 
 The v1 updater currently tracks confirmed GitHub repositories and GitHub
 release assets. Direct vendor download URLs and other release providers are
-not yet supported.
+not yet supported; see the
+[vendor download evaluation](docs/design/vendor-download.md)
+(design only — no provider implementation).
 
 The initial focus is Debian and Ubuntu. Beacon
 [v1.1.2](https://github.com/The-FKing-Projects/Beacon/releases/tag/v1.1.2)
@@ -407,12 +409,13 @@ not claims of new product scope.
    removal/downgrade blocking, APT ownership blocking, and post-install
    verification are retained. Keep these gates; do not weaken them for
    convenience.
-5. **Other standalone `.deb` sources.** **Not started.** Evaluate packages
-   whose built-in checker only points users to a vendor download, but whose
-   update is not available from APT or a PPA. The updater remains GitHub-only;
-   any additional provider needs an explicit design for version discovery,
-   source identity, redirects, and artifact verification before
-   implementation.
+5. **Other standalone `.deb` sources.** **Evaluation, not started.** Evaluate
+   packages whose built-in checker only points users to a vendor download, but
+   whose update is not available from APT or a PPA. The updater remains
+   GitHub-only. Design constraints for source identity, integrity vs
+   authenticity, gate mapping, and non-goals are in
+   [vendor download](docs/design/vendor-download.md); no provider code, CLI
+   flags, or download paths until that decision gate passes.
 
 Any future Topgrade integration should focus only on the standalone `.deb`
 gap, avoid duplicating its existing package-manager support, and preserve
