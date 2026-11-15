@@ -220,7 +220,9 @@ of an unrelated prepared update. The simulated installed APT policy is not a
 recorded host installation. These cases preserve the existing guards; they do
 not expand version-tag support. Survey-documented packaging aliases for
 `--suggest` (`git-delta`→`delta`, `du-dust`→`dust`, `fd-find`→`fd`) are covered
-separately under offline suggestion regressions and remain evidence-only.
+separately under offline suggestion regressions, remain evidence-only, and are
+**frozen** at the v1.3.0 set (see
+[documented packaging aliases](../design/suggest-package-aliases.md)).
 
 ## Interrupted preparation and changed release inputs
 
@@ -379,14 +381,16 @@ and Feishin/Moonfin-style likely filename hints) is already shipped. The
 2026-11-15 public-release survey justified the narrow LocalSend `x86-64`/`arm-64`
 and `gh`-style post-`linux` version peel filename fixes (v1.2.1) and the
 documented packaging aliases `git-delta`→`delta`, `du-dust`→`dust`,
-`fd-find`→`fd` (v1.3.0; low-tier evidence only, never auto-track). No further
-safe GitHub-path product change remains without Dennis: query-string
+`fd-find`→`fd` (v1.3.0; low-tier evidence only, never auto-track; **frozen** —
+see [documented packaging aliases](../design/suggest-package-aliases.md)). No
+further safe GitHub-path product change remains without Dennis: query-string
 homepages and `/releases` path stripping remain **decision-deferred** (no
 observed package case; see [homepage URL normalize](../design/homepage-url-normalize.md));
 `github-desktop` tag shapes and vendor-download providers stay design-only;
-LocalSend `+64`, Helix leading-zero tags, undocumented aliases, and broader
-arch aliases stay correctly refused. Confirmation, exact asset selection,
-integrity≠authenticity, APT ownership gates, and isolation rules are unchanged.
+LocalSend `+64`, Helix leading-zero tags, undocumented aliases (including
+`gh`→`cli`), and broader arch aliases stay correctly refused. Confirmation,
+exact asset selection, integrity≠authenticity, APT ownership gates, and
+isolation rules are unchanged.
 
 ## Public GitHub `.deb` survey (2026-11-15)
 
@@ -420,6 +424,9 @@ Correct limitations reinforced by this survey (still **not** authorized work):
 - Do **not** treat arbitrary `+` suffixes (LocalSend `+64`) like `+ds`/`+dfsg`.
 - Do **not** strip leading zeros in release tags (Helix `25.07.1`) to force a compare.
 - Do **not** implement `github-desktop` `release-`/`-build` parsers or vendor-download providers from these cases.
+- Do **not** add `--suggest` packaging aliases beyond the frozen v1.3.0 set
+  (including `gh`→`cli`) without a new dated case — see
+  [documented packaging aliases](../design/suggest-package-aliases.md).
 - Exact asset selection, integrity≠authenticity, and APT ownership gates unchanged.
 
 Observed download digests (integrity only; not publisher authentication):

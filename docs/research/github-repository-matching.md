@@ -185,19 +185,22 @@ Primary search still uses the installed package name. For the small set of
 labeled packaging aliases from the 2026-11-15 discovery survey
 (`git-delta`→`delta`, `du-dust`→`dust`, `fd-find`→`fd`), `--suggest` also
 runs one extra `in:name` query per alias and ranks hits at the low
-similar-name tier only. Undocumented aliases, display names, package
-descriptions, maintainer relationships, and README search remain deferred.
-The reverse direction (shorter package name vs longer repository name) is
-not treated as evidence — prefer false negatives. A search-only candidate is
-not treated as a match. Homepage preference, conflict warnings, and tie
-warnings are unchanged; nothing is auto-tracked. The direct-homepage tier
-requires an exact HTTPS GitHub repository URL for
-`github.com/<owner>/<repo>` (with an optional trailing slash). URL fragments
-such as `#readme` are ignored for matching; query strings are not accepted.
-A marketing site that is not that GitHub repository shape still does not
-receive the direct-homepage tier. Further normalize (query-string stripping
-and treating `…/releases` or similar subpages as the repo root) is
-**decision-deferred** until a dated installed-package case exists; see
+similar-name tier only. That table is **frozen** at the v1.3.0 set; do not
+add aliases (including `gh`→`cli`) without a new dated discovery case — see
+[documented packaging aliases](../design/suggest-package-aliases.md).
+Undocumented aliases, display names, package descriptions, maintainer
+relationships, and README search remain deferred. The reverse direction
+(shorter package name vs longer repository name) is not treated as evidence —
+prefer false negatives. A search-only candidate is not treated as a match.
+Homepage preference, conflict warnings, and tie warnings are unchanged;
+nothing is auto-tracked. The direct-homepage tier requires an exact HTTPS
+GitHub repository URL for `github.com/<owner>/<repo>` (with an optional
+trailing slash). URL fragments such as `#readme` are ignored for matching;
+query strings are not accepted. A marketing site that is not that GitHub
+repository shape still does not receive the direct-homepage tier. Further
+normalize (query-string stripping and treating `…/releases` or similar
+subpages as the repo root) is **decision-deferred** until a dated
+installed-package case exists; see
 [homepage URL normalize](../design/homepage-url-normalize.md).
 
 ## References
