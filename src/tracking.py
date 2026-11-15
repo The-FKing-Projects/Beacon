@@ -23,8 +23,8 @@ VERSION_PATTERN = re.compile(r"^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9
 # exact suffixes are ignored for --check; arbitrary +git / +other forms stay unknown.
 DEBIAN_UPSTREAM_REPACK_SUFFIX = re.compile(r"\+(?:ds|dfsg)\d*$")
 ASSET_ARCHITECTURES = {
-    "amd64": "amd64", "x86_64": "amd64", "x64": "amd64",
-    "arm64": "arm64", "aarch64": "arm64",
+    "amd64": "amd64", "x86_64": "amd64", "x86-64": "amd64", "x64": "amd64",
+    "arm64": "arm64", "aarch64": "arm64", "arm-64": "arm64",
     "i386": "i386", "i686": "i386", "x86": "i386",
     "armhf": "armhf", "armel": "armel", "all": "all",
 }
@@ -475,7 +475,11 @@ def latest_release(name):
     return tag, url, deb_assets
 
 
-_ARCH_TOKEN = r"x86_64|aarch64|amd64|arm64|armhf|armel|i386|i686|x64|x86|all"
+# Longer aliases (x86-64, arm-64, x86_64, aarch64) must precede shorter ones
+# (x86, x64) so LocalSend-style trailing tokens are not misread as i386 + "64".
+_ARCH_TOKEN = (
+    r"x86_64|x86-64|aarch64|amd64|arm64|arm-64|armhf|armel|i386|i686|x64|x86|all"
+)
 _VERSION_SUFFIX = r"v?\d[^_]*"
 
 
@@ -512,6 +516,9 @@ def asset_match(filename, package, architecture):
     name_part = re.sub(rf"[_-]{_VERSION_SUFFIX}$", "", name_part)
     # Feishin-style product-linux-arch: drop a single trailing linux platform token.
     name_part = re.sub(r"[_-]linux$", "", name_part)
+    # gh-style name_VERSION_linux_ARCH uses underscores, so version is still
+    # present after the linux strip; peel one trailing version again.
+    name_part = re.sub(rf"[_-]{_VERSION_SUFFIX}$", "", name_part)
     normalize = lambda value: re.sub(r"[-_.]", "", value.lower())
     if normalize(name_part) != normalize(package):
         return "Unverified: filename does not match the installed package name"

@@ -834,6 +834,12 @@ class TrackingTest(unittest.TestCase):
             ("Moonfin_Linux_amd64_v3.1.0.deb", "moonfin", "amd64", "Likely candidate"),
             ("OtherApp_Linux_v1.0.0.deb", "moonfin", "amd64", "Unverified"),
             ("Moonfin_Windows_v3.1.0.deb", "moonfin", "amd64", "Unverified"),
+            # LocalSend x86-64 / arm-64 aliases; gh underscore version_linux_arch.
+            ("LocalSend-1.18.2-linux-x86-64.deb", "localsend", "amd64", "Likely candidate"),
+            ("LocalSend-1.18.2-linux-arm-64.deb", "localsend", "arm64", "Likely candidate"),
+            ("LocalSend-1.18.2-linux-x86-64.deb", "localsend", "arm64", "Not suggested"),
+            ("gh_2.104.0_linux_amd64.deb", "gh", "amd64", "Likely candidate"),
+            ("gh_2.104.0_linux_amd64.deb", "cli", "amd64", "Unverified"),
         ]
         for filename, package, architecture, expected in cases:
             with self.subTest(filename=filename, architecture=architecture):

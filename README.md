@@ -207,11 +207,13 @@ is read-only: one package failure does not stop the rest, and the command never
 prepares, installs, or approves an APT transaction. Use `--check <package>` for
 asset filename suggestions. Beacon suggests likely assets when the filename
 resembles the installed package name and specifies a matching architecture (or
-`all`), including product-`linux`-arch names such as `Feishin-linux-amd64.deb`
-and amd64-only product-`Linux`-version names such as `Moonfin_Linux_v3.1.0.deb`.
-Ambiguous names stay unverified. Filenames are only hints: this check does not
-verify asset contents, compatibility, package identity, or integrity, and never
-auto-selects an asset for install.
+`all`), including product-`linux`-arch names such as `Feishin-linux-amd64.deb`,
+amd64-only product-`Linux`-version names such as `Moonfin_Linux_v3.1.0.deb`,
+LocalSend-style `x86-64`/`arm-64` arch tokens, and `gh`-style
+`name_VERSION_linux_ARCH` underscores. Ambiguous names stay unverified.
+Filenames are only hints: this check does not verify asset contents,
+compatibility, package identity, or integrity, and never auto-selects an asset
+for install.
 Network errors, interrupted API responses, rate limits, unavailable releases,
 and changed repository identities are reported without replacing saved
 associations. Failed requests are not retried automatically; retry the command
@@ -402,8 +404,9 @@ for further qualification; they are not claims of new product scope.
    [discovery cases](docs/research/discovery-test-cases.md)
    now cover Beacon and CloverEye workflows, a Kubuntu 26.04 v1.1.2
    operator-reported desktop summary with several standalone upgrades and
-   tracked packages, bat/fd-find available-package observations, and offline
-   fixtures. Continue
+   tracked packages, bat/fd-find available-package observations, a 2026-11-15
+   public GitHub `.deb` survey (LocalSend, `gh`, Helix, delta, dust, bottom),
+   and offline fixtures. Continue
    expanding dated observations for identity, source evidence, version
    comparison, asset selection, and verification limits; keep live GitHub
    checks separate from deterministic CI.
