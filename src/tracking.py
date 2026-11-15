@@ -481,6 +481,9 @@ _ARCH_TOKEN = (
     r"x86_64|x86-64|aarch64|amd64|arm64|arm-64|armhf|armel|i386|i686|x64|x86|all"
 )
 _VERSION_SUFFIX = r"v?\d[^_]*"
+# After a linux platform token, only peel dotted versions (gh_2.104.0_linux_*).
+# A lone numeric token may be part of the product name (foo-2 / foo_2).
+_DOTTED_VERSION_SUFFIX = r"v?\d+\.\d[^_]*"
 
 
 def asset_match(filename, package, architecture):
@@ -512,13 +515,15 @@ def asset_match(filename, package, architecture):
             inferred_linux_amd64 = True
     if asset_arch != architecture and asset_arch != "all":
         return f"Not suggested: filename indicates {asset_arch}, not {architecture}"
-    # Remove a version only when it starts with a digit (or v followed by one).
-    name_part = re.sub(rf"[_-]{_VERSION_SUFFIX}$", "", name_part)
-    # Feishin-style product-linux-arch: drop a single trailing linux platform token.
-    name_part = re.sub(r"[_-]linux$", "", name_part)
-    # gh-style name_VERSION_linux_ARCH uses underscores, so version is still
-    # present after the linux strip; peel one trailing version again.
-    name_part = re.sub(rf"[_-]{_VERSION_SUFFIX}$", "", name_part)
+    # Feishin/LocalSend/gh: drop linux before version so a trailing product
+    # suffix like foo-2 is not swallowed as "2-linux".
+    stripped = re.sub(r"[_-]linux$", "", name_part)
+    if stripped != name_part:
+        name_part = re.sub(rf"[_-]{_DOTTED_VERSION_SUFFIX}$", "", stripped)
+    else:
+        # No linux token: keep the broader trailing-version peel (bat_0.26.1,
+        # app_1_amd64).
+        name_part = re.sub(rf"[_-]{_VERSION_SUFFIX}$", "", name_part)
     normalize = lambda value: re.sub(r"[-_.]", "", value.lower())
     if normalize(name_part) != normalize(package):
         return "Unverified: filename does not match the installed package name"

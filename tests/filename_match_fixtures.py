@@ -69,7 +69,7 @@ LOCALSEND_STYLE_CASES = [
     ("LocalSend-1.18.2-linux-x86_64.deb", "localsend", "amd64", "Likely candidate"),
 ]
 
-# gh / cli underscore name_VERSION_linux_ARCH (needs version strip after linux).
+# gh / cli underscore name_VERSION_linux_ARCH (dotted version after linux).
 GH_STYLE_CASES = [
     ("gh_2.104.0_linux_amd64.deb", "gh", "amd64", "Likely candidate"),
     ("gh_2.104.0_linux_arm64.deb", "gh", "arm64", "Likely candidate"),
@@ -77,6 +77,13 @@ GH_STYLE_CASES = [
     ("gh_2.104.0_linux_amd64.deb", "cli", "amd64", "Unverified"),
     # Hyphenated product-version-linux-arch already worked; keep locked.
     ("rclone-v1.76.0-linux-amd64.deb", "rclone", "amd64", "Likely candidate"),
+    # Lone numeric product suffixes must stay part of the name (prefer FN).
+    ("foo-2-linux-amd64.deb", "foo", "amd64", "Unverified"),
+    ("foo-2-linux-amd64.deb", "foo-2", "amd64", "Likely candidate"),
+    ("foo_2_linux_amd64.deb", "foo", "amd64", "Unverified"),
+    ("foo_2_linux_amd64.deb", "foo_2", "amd64", "Likely candidate"),
+    # Without a linux token, a trailing numeric component may still peel.
+    ("foo_2_amd64.deb", "foo", "amd64", "Likely candidate"),
 ]
 
 # Message fragments required for specific positive outcomes.
