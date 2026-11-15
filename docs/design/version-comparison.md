@@ -114,16 +114,19 @@ Lab note: installed `3:20240117-1ubuntu0.1` vs tag `20250605` remains unknown
 
 ## Follow-up (not in this change)
 
-Further tag or revision support remains backlog: add formats only with
-unambiguous mappings and offline regressions. `release-…-linux*` tags,
-`-build.*` revisions, epochs, and `ubuntu` revisions stay unknown until then.
-Rely on `--inspect` for selected-asset Debian direction.
+Further tag or revision support remains backlog for forms **other than** the
+GitHub Desktop–style subset: add formats only with unambiguous mappings and
+offline regressions. Epochs and `ubuntu` / distro revisions stay unknown
+until separately justified. Rely on `--inspect` for selected-asset Debian
+direction.
 
-Evaluation of GitHub Desktop–style pairs (`3.7.1-build.50` vs
-`release-3.4.13-linux1`), rejected global strip strategies, the stay-unknown
-rule, and the decision gate before any parser expansion:
+**GitHub Desktop–style decision (2026-11-15):** keep `--check` unknown for
+`release-…-linux*` tags and `-build.*` installed revisions (including the
+Kubuntu sentinel `3.7.1-build.50` vs `release-3.4.13-linux1`). No global
+strip; no publisher-scoped profile until that note’s gate is fully met with
+fixtures. Written decision:
 [GitHub Desktop–style tag comparison](github-desktop-tag-comparison.md)
-(design only — no code yet).
+(docs only — no parser code).
 
 Related: [discovery test cases](../research/discovery-test-cases.md),
 [APT handoff](apt-handoff.md).

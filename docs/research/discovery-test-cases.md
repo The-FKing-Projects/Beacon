@@ -317,9 +317,11 @@ providers, or treating digests as authenticity proofs.
 Canonical operator rules for when `--check` compares versus when it prints
 unknown — including Kubuntu `github-desktop` / `spdx-licenses` examples and
 the `--inspect` vs `--prepare` architecture difference — are in
-[version comparison](../design/version-comparison.md). Expanding the
-supported tag set remains backlog and needs unambiguous mappings plus offline
-regressions before any code change.
+[version comparison](../design/version-comparison.md). GitHub Desktop–style
+shapes stay unknown per
+[github-desktop-tag-comparison](../design/github-desktop-tag-comparison.md).
+Other unsupported tag forms remain backlog and need unambiguous mappings plus
+offline regressions before any code change.
 
 ## Supporting lab observations (2026-11-14)
 
@@ -361,7 +363,7 @@ because they appear in this list:
 
 | Direction | Motivation from cases | Constraint |
 | --- | --- | --- |
-| Broader release-tag version comparison | `github-desktop` still unknown; `spdx-licenses` `+ds` handled; epoch/`ubuntu` unknowns remain | **Design note** for Desktop-style tags in [github-desktop-tag-comparison](../design/github-desktop-tag-comparison.md); no parser expansion until that decision gate passes; keep unsupported tags unknown |
+| Broader release-tag version comparison | `github-desktop` still unknown; `spdx-licenses` `+ds` handled; epoch/`ubuntu` unknowns remain | **Decision recorded** for Desktop-style tags in [github-desktop-tag-comparison](../design/github-desktop-tag-comparison.md): stay unknown (no `shiftkey/desktop` profile; no global `release-`/`-build` regex); epoch/`ubuntu`/other forms still backlog; use `--inspect` for asset Debian direction |
 | Optional `--check-all` | Multiple tracked packages on one host | **Done** as read-only summary with per-package soft failures; never auto-prepare or auto-install |
 | Slightly more flexible filename matching, or mark likely after successful inspect | Moonfin title-case / Feishin channel-style names; LocalSend `x86-64`/`arm-64`; `gh` underscores | **Done** for product-`linux`-arch, amd64-only product-`Linux`-version, LocalSend hyphenated arch aliases, and post-`linux` version peel; post-inspect auto-likely and broader aliases remain out of scope; exact selection still mandatory |
 | Document version-comparison rules more prominently for operators | Operators need to know when `--check` says unknown vs when `--inspect` decides direction | **Done** for current behavior in [version comparison](../design/version-comparison.md); broader formats still backlog |

@@ -427,10 +427,14 @@ for further qualification; they are not claims of new product scope.
    numeric Debian revision on the installed side, and ignoring installed
    upstream `+ds` / `+dfsg` repack markers; other forms stay unknown. Operator
    rules are documented in
-   [version comparison](docs/design/version-comparison.md). Installation
-   decisions use the selected asset's full Debian version. Add further tag
-   mappings only where interpretation is unambiguous and backed by regression
-   cases.
+   [version comparison](docs/design/version-comparison.md). GitHub
+   Desktop–style shapes (`release-…-linux*`, `-build.*`, including Kubuntu
+   `3.7.1-build.50` vs `release-3.4.13-linux1`) are **decision-closed**: keep
+   `--check` unknown and use `--inspect` for asset Debian versions; see
+   [github-desktop tag comparison](docs/design/github-desktop-tag-comparison.md).
+   Installation decisions use the selected asset's full Debian version. Add
+   further tag mappings only where interpretation is unambiguous and backed by
+   regression cases.
 4. **Preserved installation safety.** **Shipped** for the declared support
    matrix. Reviewed preparation and installation are exercised with local
    fixtures in the isolated APT suite; source confirmation, exact asset
