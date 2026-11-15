@@ -196,9 +196,11 @@ after connectivity recovers or the rate limit clears. `--check` version
 comparison is intentionally narrow: three-component numeric tags with an
 optional `v`, and installed versions that are either the same shape or that
 shape plus a purely numeric Debian revision (`0.8.1-1` versus `v0.8.2`).
-Anything else — epochs, `+ds`, `-1ubuntu1`, build suffixes such as
-`3.7.1-build.50`, tags like `release-3.4.13-linux1`, prereleases, and other
-non-`X.Y.Z` forms — prints
+A Debian upstream repack marker `+ds` / `+dfsg` (optional digits) on the
+installed upstream portion is ignored for this comparison
+(`3.27.0+ds-1` versus `v3.29.0`). Anything else — epochs, `-1ubuntu1`, build
+suffixes such as `3.7.1-build.50`, tags like `release-3.4.13-linux1`,
+prereleases, and other non-`X.Y.Z` forms — prints
 `Unknown: versions cannot be compared safely.` That unknown result is
 expected, not a failure to retry blindly. Equal upstream triples from
 `--check` do not prove packages are identical; use `--inspect` for the
@@ -382,9 +384,10 @@ not claims of new product scope.
    stay deferred until more labeled cases justify them. Filename and name
    similarity remain hints, not proof of provenance.
 3. **Reliable update comparisons.** **Partial.** Release-tag comparison
-   supports three-component numeric versions with an optional `v` prefix and a
-   numeric Debian revision on the installed side; other forms stay unknown.
-   Operator rules are documented in
+   supports three-component numeric versions with an optional `v` prefix, a
+   numeric Debian revision on the installed side, and ignoring installed
+   upstream `+ds` / `+dfsg` repack markers; other forms stay unknown. Operator
+   rules are documented in
    [version comparison](docs/design/version-comparison.md). Installation
    decisions use the selected asset's full Debian version. Add further tag
    mappings only where interpretation is unambiguous and backed by regression
