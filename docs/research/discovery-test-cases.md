@@ -361,7 +361,7 @@ because they appear in this list:
 | Slightly more flexible filename matching, or mark likely after successful inspect | Moonfin title-case / Feishin channel-style names | **Done** for product-`linux`-arch and amd64-only product-`Linux`-version likely hints; post-inspect auto-likely and broader aliases remain out of scope; exact selection still mandatory |
 | Document version-comparison rules more prominently for operators | Operators need to know when `--check` says unknown vs when `--inspect` decides direction | **Done** for current behavior in [version comparison](../design/version-comparison.md); broader formats still backlog |
 | Homepage URL normalization (strip fragments such as `#readme`) | Caprine direct-homepage tier missed | **Done** for fragments only (`homepage_repository`); query strings still rejected; still no auto-confirm |
-| Non-GitHub vendor download providers | `discord-ptb` correct negative; Steam-style vendor homepages | Evaluation/design until source identity, redirects, and verification are defined |
+| Non-GitHub vendor download providers | `discord-ptb` correct negative; Steam-style vendor homepages | **Evaluation doc** in [vendor download](../design/vendor-download.md); still no provider implementation until the decision gate passes |
 
 ## Remaining live qualification sketches
 
@@ -376,7 +376,7 @@ confirmation.
 | Competing glibc vs musl or multi-arch `.deb` assets | **Exercised** in lab for `bat` musl vs glibc; earlier arm64 notes retained | Exact selection; reject identity/architecture mismatches |
 | Upstream tag with prerelease or non-numeric Debian revision | **Exercised** via `github-desktop`, `spdx-licenses`, lab epoch/`ubuntu` | No new parser without unambiguous mapping + regression |
 | Same upstream version, different Debian revision or rebuild | **Exercised** via Beacon `1.1.2-1` vs tag `v1.1.2` metadata | Tag match ≠ package identity or install approval |
-| Vendor download-only updater (no GitHub release asset) | **Exercised** as correct negatives (`discord-ptb`; Steam-style evaluation) | Design/evaluation only; no provider implementation in this track |
+| Vendor download-only updater (no GitHub release asset) | **Exercised** as correct negatives (`discord-ptb`; Steam-style evaluation); constraints captured in [vendor download](../design/vendor-download.md) | Design/evaluation only; no provider implementation in this track |
 | Caprine-style same-version asset without `SHA256SUMS` | **Exercised** (Kubuntu current `2.61.0`; lab digest-only download) | Unsigned digests are not publisher authentication |
 | Homepage fragment / non-repository marketing URL | **Exercised**; `#readme` fragment stripping covered by unit tests; `gh` → `cli.github.com` remains non-direct | Query strings and marketing sites still unsupported; no auto-confirm |
 
