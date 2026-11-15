@@ -823,10 +823,25 @@ class TrackingTest(unittest.TestCase):
             ("different_1.2.3_amd64.deb", "app", "amd64", "Unverified"),
             ("app_1.2.3.deb", "app", "amd64", "Unverified"),
             ("app_1.2.3_amd64.deb", "app", "riscv64", "Not suggested"),
+            # Kubuntu Feishin / Moonfin-style names.
+            ("Feishin-linux-amd64.deb", "feishin", "amd64", "Likely candidate"),
+            ("Feishin-linux-arm64.deb", "feishin", "amd64", "Not suggested"),
+            ("Feishin-linux-amd64.deb", "other", "amd64", "Unverified"),
+            ("Moonfin_Linux_v3.1.0.deb", "moonfin", "amd64", "Likely candidate"),
+            ("Moonfin_Linux_v3.1.0.deb", "moonfin", "arm64", "Unverified"),
+            ("Moonfin_Linux_amd64_v3.1.0.deb", "moonfin", "amd64", "Likely candidate"),
+            ("OtherApp_Linux_v1.0.0.deb", "moonfin", "amd64", "Unverified"),
+            ("Moonfin_Windows_v3.1.0.deb", "moonfin", "amd64", "Unverified"),
         ]
         for filename, package, architecture, expected in cases:
             with self.subTest(filename=filename, architecture=architecture):
-                self.assertTrue(tracking.asset_match(filename, package, architecture).startswith(expected))
+                result = tracking.asset_match(filename, package, architecture)
+                self.assertTrue(
+                    result.startswith(expected),
+                    msg=f"{filename} for {package}:{architecture} -> {result}",
+                )
+        moonfin = tracking.asset_match("Moonfin_Linux_v3.1.0.deb", "moonfin", "amd64")
+        self.assertIn("Linux platform token treated as amd64", moonfin)
 
     def test_asset_reporting_no_match_and_multiple_matches(self):
         url = "https://github.com/owner/project/releases/download/v1/"

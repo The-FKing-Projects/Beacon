@@ -192,9 +192,11 @@ is read-only: one package failure does not stop the rest, and the command never
 prepares, installs, or approves an APT transaction. Use `--check <package>` for
 asset filename suggestions. Beacon suggests likely assets when the filename
 resembles the installed package name and specifies a matching architecture (or
-`all`); it also shows other `.deb` assets for manual review and flags multiple
-likely candidates. Filenames are only hints: this check does not verify asset
-contents, compatibility, package identity, or integrity.
+`all`), including product-`linux`-arch names such as `Feishin-linux-amd64.deb`
+and amd64-only product-`Linux`-version names such as `Moonfin_Linux_v3.1.0.deb`.
+Ambiguous names stay unverified. Filenames are only hints: this check does not
+verify asset contents, compatibility, package identity, or integrity, and never
+auto-selects an asset for install.
 Network errors, interrupted API responses, rate limits, unavailable releases,
 and changed repository identities are reported without replacing saved
 associations. Failed requests are not retried automatically; retry the command

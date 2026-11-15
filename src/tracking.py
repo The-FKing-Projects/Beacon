@@ -475,24 +475,51 @@ def latest_release(name):
     return tag, url, deb_assets
 
 
+_ARCH_TOKEN = r"x86_64|aarch64|amd64|arm64|armhf|armel|i386|i686|x64|x86|all"
+_VERSION_SUFFIX = r"v?\d[^_]*"
+
+
 def asset_match(filename, package, architecture):
     """Return filename evidence, not a guarantee of package compatibility."""
     stem = filename[:-4].lower()
-    arch_match = re.search(
-        r"[_-](x86_64|aarch64|amd64|arm64|armhf|armel|i386|i686|x64|x86|all)$",
-        stem,
-    )
-    if not arch_match:
-        return "Unverified: architecture not recognized in filename"
-    asset_arch = ASSET_ARCHITECTURES[arch_match.group(1)]
+    inferred_linux_amd64 = False
+    arch_match = re.search(rf"[_-]({_ARCH_TOKEN})$", stem)
+    if arch_match:
+        name_part = stem[:arch_match.start()]
+        asset_arch = ASSET_ARCHITECTURES[arch_match.group(1)]
+    else:
+        # Allow Arch before a trailing version: Name_linux_amd64_v1.2.3
+        arch_before_version = re.search(
+            rf"[_-]({_ARCH_TOKEN})[_-]{_VERSION_SUFFIX}$",
+            stem,
+        )
+        if arch_before_version:
+            name_part = stem[:arch_before_version.start()]
+            asset_arch = ASSET_ARCHITECTURES[arch_before_version.group(1)]
+        else:
+            # Moonfin-style Name_Linux_v3.1.0.deb: Linux platform token with no
+            # arch suffix is treated as amd64 only. Prefer false negatives on
+            # other architectures and when the product token does not match.
+            linux_version = re.search(rf"[_-]linux[_-]{_VERSION_SUFFIX}$", stem)
+            if not linux_version or architecture != "amd64":
+                return "Unverified: architecture not recognized in filename"
+            name_part = stem[:linux_version.start()]
+            asset_arch = "amd64"
+            inferred_linux_amd64 = True
     if asset_arch != architecture and asset_arch != "all":
         return f"Not suggested: filename indicates {asset_arch}, not {architecture}"
-    name_part = stem[:arch_match.start()]
     # Remove a version only when it starts with a digit (or v followed by one).
-    name_part = re.sub(r"[_-]v?\d[^_]*$", "", name_part)
+    name_part = re.sub(rf"[_-]{_VERSION_SUFFIX}$", "", name_part)
+    # Feishin-style product-linux-arch: drop a single trailing linux platform token.
+    name_part = re.sub(r"[_-]linux$", "", name_part)
     normalize = lambda value: re.sub(r"[-_.]", "", value.lower())
     if normalize(name_part) != normalize(package):
         return "Unverified: filename does not match the installed package name"
+    if inferred_linux_amd64:
+        return (
+            "Likely candidate: filename matches package name; "
+            "Linux platform token treated as amd64"
+        )
     return f"Likely candidate: filename matches package name and {asset_arch} architecture"
 
 
