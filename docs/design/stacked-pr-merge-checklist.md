@@ -89,7 +89,9 @@ beacon --check-all
 CI remains authoritative for the matrix and isolated APT handoff jobs
 described under [Compatibility and validation](../../README.md#compatibility-and-validation).
 Skip host Bubblewrap APT experiments unless following
-[APT handoff](apt-handoff.md) isolation rules.
+[isolated APT suite](isolated-apt-suite.md) / [APT handoff](apt-handoff.md)
+isolation rules (opt-in `BEACON_RUN_APT_HOOK_EXPERIMENTS=1` only; never the
+host package database).
 
 ## Suggested version bump / release notes (draft only)
 

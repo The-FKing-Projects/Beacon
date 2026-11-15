@@ -113,6 +113,19 @@ containers do not permit Bubblewrap's unprivileged user namespaces. See the
 [Debian package workflow](.github/workflows/debian-package.yml) for current
 results; a listed target is not a claim that every run passes.
 
+Local validation (deterministic; no host APT installs):
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+Opt-in isolated real APT/dpkg experiments (Bubblewrap only; never against the
+host package database), the v1.1.2 `/run` `noexec` helper note, and how live
+discovery differs from CI:
+[Isolated APT suite](docs/design/isolated-apt-suite.md).
+Trust boundary and historical qualification:
+[APT handoff design](docs/design/apt-handoff.md).
+
 These are Linux amd64 container checks, not full desktop, derivative
 distribution, or other-architecture certification. Networked GitHub discovery
 and release inspection have separate live examples in the
@@ -257,6 +270,8 @@ Re-run `--check`, select and `--prepare` the desired asset, then review it
 again with `--install`; do not assume a failed installation was rolled back.
 The [APT handoff design](docs/design/apt-handoff.md) documents the trust
 boundary, safety mechanism, qualification record, and accepted limitations.
+How to re-run the isolated suite without touching the host package database:
+[Isolated APT suite](docs/design/isolated-apt-suite.md).
 
 ### Tracking-store errors and recovery
 
