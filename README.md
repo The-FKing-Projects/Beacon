@@ -15,7 +15,7 @@ not yet supported; see the
 (design only — no provider implementation).
 
 The initial focus is Debian and Ubuntu. Beacon
-[v1.1.3](https://github.com/The-FKing-Projects/Beacon/releases/tag/v1.1.3)
+[v1.2.0](https://github.com/The-FKing-Projects/Beacon/releases/tag/v1.2.0)
 is the latest stable CLI updater release, available as a GitHub Release Debian
 package and through the project's signed APT repository. Discovery, source
 classification, GitHub upstream suggestions, manually confirmed release
@@ -90,11 +90,11 @@ this source.
 
 Download the `.deb` from the
 [latest stable release](https://github.com/The-FKing-Projects/Beacon/releases/latest).
-For v1.1.3, the file is `beacon_1.1.3-1_all.deb`. Open a terminal in the
+For v1.2.0, the file is `beacon_1.2.0-1_all.deb`. Open a terminal in the
 directory containing the downloaded file and run:
 
 ```bash
-sudo apt install ./beacon_1.1.3-1_all.deb
+sudo apt install ./beacon_1.2.0-1_all.deb
 beacon --version
 ```
 
@@ -392,11 +392,11 @@ release assets or make installing those assets safe.
 
 ## Post-v1 roadmap
 
-v1.1.x (through [v1.1.3](https://github.com/The-FKing-Projects/Beacon/releases/tag/v1.1.3))
-delivered much of the original post-v1 reliability focus. The list below
-reconciles those acceptance criteria with the current implementation. Items
-marked partial or unfinished remain goals for further qualification; they are
-not claims of new product scope.
+[v1.2.0](https://github.com/The-FKing-Projects/Beacon/releases/tag/v1.2.0)
+is the latest stable release. v1.1.x delivered much of the original post-v1
+reliability focus. The list below reconciles those acceptance criteria with
+the current implementation. Items marked partial or unfinished remain goals
+for further qualification; they are not claims of new product scope.
 
 1. **Broader real-world evidence.** **Partial.** The
    [discovery cases](docs/research/discovery-test-cases.md)
