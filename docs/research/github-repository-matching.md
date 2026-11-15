@@ -163,14 +163,14 @@ matches and false positives before enabling automatic associations.
 ## Current `--suggest` behavior
 
 The current command resolves a package's exact HTTPS GitHub homepage when
-available and performs one repository-name search. It preserves candidates
-and labels evidence without saving or approving an association:
+available and searches repository names. It preserves candidates and labels
+evidence without saving or approving an association:
 
 | Display tier | Evidence used |
 | --- | --- |
 | Very high | Installed package homepage directly identifies the repository |
 | High | Package and repository names match after case and `-`/`_` normalization |
-| Low | Names match only after separators are removed |
+| Low | Names match after separators are removed; a documented packaging alias matches; or the repository name is a full hyphen-delimited token of the package name (length ≥ 3) |
 | Candidate only | Search returned the repository, but no independent identity signal matched |
 
 When multiple repositories tie for the strongest nonzero tier, `--suggest`
@@ -179,14 +179,23 @@ candidate conflicts with a direct homepage repository, it warns that both
 must be reviewed. Fork and archive flags are displayed as repository status,
 not as identity evidence. These labels intentionally are not numeric
 probabilities; a calibrated score is deferred until there is a labeled
-true/false-match set. Search is currently limited to package-name results and
-does not yet use display names, package descriptions, maintainer
-relationships, README search, or aliases. A search-only candidate is not
-treated as a match. The direct-homepage tier requires an exact HTTPS GitHub
-repository URL for `github.com/<owner>/<repo>` (with an optional trailing
-slash). URL fragments such as `#readme` are ignored for matching; query
-strings are not accepted. A marketing site that is not that GitHub repository
-shape still does not receive the direct-homepage tier.
+true/false-match set.
+
+Primary search still uses the installed package name. For the small set of
+labeled packaging aliases from the 2026-11-15 discovery survey
+(`git-delta`→`delta`, `du-dust`→`dust`, `fd-find`→`fd`), `--suggest` also
+runs one extra `in:name` query per alias and ranks hits at the low
+similar-name tier only. Undocumented aliases, display names, package
+descriptions, maintainer relationships, and README search remain deferred.
+The reverse direction (shorter package name vs longer repository name) is
+not treated as evidence — prefer false negatives. A search-only candidate is
+not treated as a match. Homepage preference, conflict warnings, and tie
+warnings are unchanged; nothing is auto-tracked. The direct-homepage tier
+requires an exact HTTPS GitHub repository URL for
+`github.com/<owner>/<repo>` (with an optional trailing slash). URL fragments
+such as `#readme` are ignored for matching; query strings are not accepted.
+A marketing site that is not that GitHub repository shape still does not
+receive the direct-homepage tier.
 
 ## References
 

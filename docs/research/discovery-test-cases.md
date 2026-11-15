@@ -218,7 +218,9 @@ conservative release comparisons; APT ownership blocking before release
 selection/download; and `fd`/`fd-find` rejection with cleanup and preservation
 of an unrelated prepared update. The simulated installed APT policy is not a
 recorded host installation. These cases preserve the existing guards; they do
-not enable package-name aliases or expand version-tag support.
+not expand version-tag support. Survey-documented packaging aliases for
+`--suggest` (`git-delta`→`delta`, `du-dust`→`dust`, `fd-find`→`fd`) are covered
+separately under offline suggestion regressions and remain evidence-only.
 
 ## Interrupted preparation and changed release inputs
 
@@ -344,7 +346,7 @@ weakening confirmation or integrity gates.
 
 | Case | Offline / fixture coverage | Live observation | Still needed |
 | --- | --- | --- | --- |
-| Package with a direct GitHub homepage | Simulated installed `--suggest` coverage is for `fd-find` (homepage outranks a synthetic exact-name search hit; no auto-save) and Caprine-style `#readme` fragment stripping. `bat` offline coverage is available-package provenance, release-tag/asset comparison, and filename matching — not a simulated installed suggestion flow | Kubuntu standalone workflow; lab `iputils-ping` very-high homepage rank; Caprine `#readme` was an operator miss before fragment stripping | Query-string homepages remain unsupported; confirm ranking without auto-save |
+| Package with a direct GitHub homepage | Simulated installed `--suggest` coverage is for `fd-find` (homepage outranks a synthetic exact-name search hit; no auto-save), Caprine-style `#readme` fragment stripping, and survey aliases (`git-delta`/`du-dust` low-tier only). `bat` offline coverage is available-package provenance, release-tag/asset comparison, and filename matching — not a simulated installed suggestion flow | Kubuntu standalone workflow; lab `iputils-ping` very-high homepage rank; Caprine `#readme` was an operator miss before fragment stripping | Query-string homepages remain unsupported; confirm ranking without auto-save; do not broaden undocumented aliases |
 | Installed version also managed by APT | APT ownership blocks preparation when any policy version comes from a repository, including a newer local candidate over an older repo version | Lab `iputils-ping` prepare refused; `bat`/`fd-find`/`gh` Ubuntu Repository after fresh apt lists | Repeat handoff refusal on more APT-managed desktop packages |
 | Ambiguous or renamed package/asset | `fd` vs `fd-find` rejection, musl filename non-matches, arm64-vs-amd64 filtering, Feishin product-`linux`-arch, Moonfin Linux+version amd64, LocalSend `x86-64`/`arm-64`, and `gh` underscore version_linux heuristics | CloverEye hyphen/name mismatch; bat/bottom musl; operator Moonfin/Feishin; 2026-11-15 `git-delta`/`du-dust` name separation | Keep exact user selection; do not promote hints to provenance |
 | Unsupported upstream tag/version | Epochs, `ubuntu1` and other distro suffixes, prereleases, and malformed tags stay unknown; numeric Debian revisions compare upstream-only; installed `+ds`/`+dfsg` upstream markers are ignored for `--check` | `github-desktop` build/tag mismatch still unknown; `spdx-licenses` `+ds` now comparable for the tag check only; lab epoch/`ubuntu` unknown; LocalSend `+64` and Helix `25.07.1` correctly unknown | Broader comparison only with unambiguous mappings and regressions |
@@ -395,9 +397,9 @@ not already covered by Beacon/CloverEye/bat/fd/Feishin/Moonfin/github-desktop.
 | [`localsend/localsend`](https://github.com/localsend/localsend/releases/tag/v1.18.2) | `v1.18.2` | `LocalSend-1.18.2-linux-x86-64.deb`, `LocalSend-1.18.2-linux-arm-64.deb` | `localsend` / `1.18.2+64` / `amd64` (x86-64 asset inspected) | After the narrow alias fix: **likely** for matching arch; before the fix, `x86-64` was misread as `x86`→i386 (`Not suggested`) and `arm-64` stayed unrecognized | Installed `1.18.2+64` vs `v1.18.2` → **unknown** (`+64` is not `+ds`/`+dfsg`; do not broaden repack ignoring). Plain `1.18.1` vs `v1.18.2` would compare |
 | [`cli/cli`](https://github.com/cli/cli/releases/tag/v2.104.0) | `v2.104.0` | `gh_2.104.0_linux_amd64.deb` (also arm64/386/armv6) | `gh` / `2.104.0` / `amd64` | Underscore `name_VERSION_linux_ARCH`: **likely** after peeling version again post-`linux`; previously unverified. Package name is `gh`, not `cli` | Comparable (`2.100.0` vs `v2.104.0` → newer). Lab note still applies: homepage `cli.github.com` is not a direct repository URL |
 | [`helix-editor/helix`](https://github.com/helix-editor/helix/releases/tag/25.07.1) | `25.07.1` | `helix_25.7.1-1_amd64.deb` | `helix` / `25.7.1-1` / `amd64` | **Likely** (`helix` + amd64) | Tag `25.07.1` has a leading-zero component → **unknown** even though the asset version is `25.7.1-1`. Correct refusal; no parser change |
-| [`dandavison/delta`](https://github.com/dandavison/delta/releases/tag/0.20.1) | `0.20.1` (no `v`) | `git-delta_0.20.1_amd64.deb`; also `git-delta-musl_*` | `git-delta` / `0.20.1` / `amd64` | **Likely** only for package `git-delta`; `delta` and musl filenames stay **unverified** | Tag without `v` still comparable (`0.19.0` vs `0.20.1` → newer) |
-| [`bootandy/dust`](https://github.com/bootandy/dust/releases/tag/v1.2.7) | `v1.2.7` | `du-dust_1.2.7-1_amd64.deb` | `du-dust` / `1.2.7-1` / `amd64` | **Likely** for `du-dust`; package name `dust` is a **correct negative** (filename product token is `du-dust`) | `1.2.0-1` vs `v1.2.7` → newer upstream (revision ignored) |
-| [`ClementTsang/bottom`](https://github.com/ClementTsang/bottom/releases/tag/0.15.0) | `0.15.0` | `bottom_0.15.0-1_amd64.deb` vs `bottom-musl_0.15.0-1_amd64.deb` | `bottom` / `0.15.0-1` / `amd64` (glibc asset) | glibc asset **likely**; musl filename **unverified** (same bat-class guard) | No-`v` tag comparable with numeric Debian revision |
+| [`dandavison/delta`](https://github.com/dandavison/delta/releases/tag/0.20.1) | `0.20.1` (no `v`) | `git-delta_0.20.1_amd64.deb`; also `git-delta-musl_*` | `git-delta` / `0.20.1` / `amd64` | **Likely** only for package `git-delta`; `delta` and musl filenames stay **unverified**. `--suggest` may also search alias `delta` and rank it **Low** (never auto-track) | Tag without `v` still comparable (`0.19.0` vs `0.20.1` → newer) |
+| [`bootandy/dust`](https://github.com/bootandy/dust/releases/tag/v1.2.7) | `v1.2.7` | `du-dust_1.2.7-1_amd64.deb` | `du-dust` / `1.2.7-1` / `amd64` | **Likely** for `du-dust`; package name `dust` is a **correct negative** (filename product token is `du-dust`). `--suggest` may search alias `dust` at **Low** tier only; reverse `dust`→`du-dust` stays non-evidence | `1.2.0-1` vs `v1.2.7` → newer upstream (revision ignored) |
+| [`ClementTsang/bottom`](https://github.com/ClementTsang/bottom/releases/tag/0.15.0) | `0.15.0` | `bottom_0.15.0-1_amd64.deb` vs `bottom-musl_0.15.0-1_amd64.deb` | `bottom` / `0.15.0-1` / `amd64` (glibc asset) | glibc asset **likely**; musl filename **unverified** (same bat-class guard). Package/repo names already match for `--suggest` (no alias needed) | No-`v` tag comparable with numeric Debian revision |
 
 Supporting positives already matching current heuristics (no new code needed;
 recorded for breadth):
@@ -426,7 +428,9 @@ Observed download digests (integrity only; not publisher authentication):
 - `bottom_0.15.0-1_amd64.deb`: `02aabca9cd9dd41d3fbf3642e96b5a7b266027fd0ba9eb78a96e4c5eeabcd8c8`
 
 Offline regressions for the LocalSend and `gh` filename shapes live in
-`tests/filename_match_fixtures.py` / `tests/test_tracking.py`.
+`tests/filename_match_fixtures.py` / `tests/test_tracking.py`. Offline
+`--suggest` regressions for the documented packaging aliases live in
+`tests/test_suggestions.py`.
 
 ## Remaining live qualification sketches
 
