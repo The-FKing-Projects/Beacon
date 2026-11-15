@@ -119,5 +119,11 @@ unambiguous mappings and offline regressions. `release-…-linux*` tags,
 `-build.*` revisions, epochs, and `ubuntu` revisions stay unknown until then.
 Rely on `--inspect` for selected-asset Debian direction.
 
+Evaluation of GitHub Desktop–style pairs (`3.7.1-build.50` vs
+`release-3.4.13-linux1`), rejected global strip strategies, the stay-unknown
+rule, and the decision gate before any parser expansion:
+[GitHub Desktop–style tag comparison](github-desktop-tag-comparison.md)
+(design only — no code yet).
+
 Related: [discovery test cases](../research/discovery-test-cases.md),
 [APT handoff](apt-handoff.md).
