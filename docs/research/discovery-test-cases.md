@@ -279,7 +279,7 @@ integrity evidence only; they do **not** prove publisher authenticity.
 
 | Package | Observed check | Notes |
 | --- | --- | --- |
-| `caprine` | Current `2.61.0` | Homepage included a `#readme` fragment, so `--suggest` did not assign the “very high” direct-homepage tier; name search still surfaced the correct repository for manual confirmation |
+| `caprine` | Current `2.61.0` | Homepage included a `#readme` fragment; at the time of the operator report that missed the “very high” direct-homepage tier (name search still found the repo). Fragment stripping is now covered by unit tests so `#readme` ranks as a direct homepage match without auto-confirm |
 | `feishin` | Current `1.17.0` | Asset `Feishin-linux-amd64.deb` left **unverified** (no package-name match); conservative and correct |
 | `github-desktop` | Unknown comparison | Installed `3.7.1-build.50` versus tag `release-3.4.13-linux1`; release-tag comparison refused; assets not marked likely |
 | `spdx-licenses` | Unknown comparison; no `.deb` assets | Installed `3.27.0+ds-1` versus tag `v3.29.0`; Debian `+ds` revision outside supported rules; upstream release ships XML, not a Debian package |
@@ -299,7 +299,7 @@ integrity evidence only; they do **not** prove publisher authenticity.
 
 - Release-tag version comparison remains narrow (see rules below)
 - Filename heuristics stay conservative; title-case or channel-style names often stay unverified until exact user selection
-- A homepage URL with a fragment (for example `#readme`) misses the direct “very high” homepage match even when the repository path is correct
+- Homepage query strings and non-repository marketing URLs still miss the direct homepage tier; fragments such as `#readme` are ignored for matching
 - No bulk `--check-all`; each association is checked individually
 - Tracking does not auto-update associations when upstreams rename or move
 
@@ -341,7 +341,7 @@ weakening confirmation or integrity gates.
 
 | Case | Offline / fixture coverage | Live observation | Still needed |
 | --- | --- | --- | --- |
-| Package with a direct GitHub homepage | Simulated installed `--suggest` coverage is for `fd-find` (homepage outranks a synthetic exact-name search hit; no auto-save). `bat` offline coverage is available-package provenance, release-tag/asset comparison, and filename matching — not a simulated installed suggestion flow | Kubuntu standalone workflow; lab `iputils-ping` very-high homepage rank; Caprine `#readme` homepage missed direct tier | More homepages with fragments/query strings; confirm ranking without auto-save |
+| Package with a direct GitHub homepage | Simulated installed `--suggest` coverage is for `fd-find` (homepage outranks a synthetic exact-name search hit; no auto-save) and Caprine-style `#readme` fragment stripping. `bat` offline coverage is available-package provenance, release-tag/asset comparison, and filename matching — not a simulated installed suggestion flow | Kubuntu standalone workflow; lab `iputils-ping` very-high homepage rank; Caprine `#readme` was an operator miss before fragment stripping | Query-string homepages remain unsupported; confirm ranking without auto-save |
 | Installed version also managed by APT | APT ownership blocks preparation when any policy version comes from a repository, including a newer local candidate over an older repo version | Lab `iputils-ping` prepare refused; `bat`/`fd-find`/`gh` Ubuntu Repository after fresh apt lists | Repeat handoff refusal on more APT-managed desktop packages |
 | Ambiguous or renamed package/asset | `fd` vs `fd-find` rejection, musl filename non-matches, and arm64-vs-amd64 filtering | Moonfin/Feishin conservative filenames; CloverEye hyphen/name mismatch; bat musl internal identity `bat-musl` | Keep exact user selection; optional post-inspect “likely” marking is backlog only |
 | Unsupported upstream tag/version | Epochs, `ubuntu1` and other distro suffixes, prereleases, and malformed tags stay unknown; numeric Debian revisions compare upstream-only | `github-desktop` build/tag mismatch unknown; `spdx-licenses` `+ds` unknown; lab epoch/`ubuntu` unknown | Broader comparison only with unambiguous mappings and regressions |
@@ -360,7 +360,7 @@ because they appear in this list:
 | Optional `--check-all` | Multiple tracked packages on one host | Must preserve per-association errors and never auto-prepare or auto-install |
 | Slightly more flexible filename matching, or mark likely after successful inspect | Moonfin title-case / Feishin channel-style names | Exact asset selection and identity checks remain mandatory; do not treat filename hints as provenance |
 | Document version-comparison rules more prominently for operators | Operators need to know when `--check` says unknown vs when `--inspect` decides direction | **Done** for current behavior in [version comparison](../design/version-comparison.md); broader formats still backlog |
-| Homepage URL normalization (strip fragments such as `#readme`) | Caprine direct-homepage tier missed | Tiny, test-backed change if pursued; still no auto-confirm |
+| Homepage URL normalization (strip fragments such as `#readme`) | Caprine direct-homepage tier missed | **Done** for fragments only (`homepage_repository`); query strings still rejected; still no auto-confirm |
 | Non-GitHub vendor download providers | `discord-ptb` correct negative; Steam-style vendor homepages | Evaluation/design until source identity, redirects, and verification are defined |
 
 ## Remaining live qualification sketches
@@ -378,7 +378,7 @@ confirmation.
 | Same upstream version, different Debian revision or rebuild | **Exercised** via Beacon `1.1.2-1` vs tag `v1.1.2` metadata | Tag match ≠ package identity or install approval |
 | Vendor download-only updater (no GitHub release asset) | **Exercised** as correct negatives (`discord-ptb`; Steam-style evaluation) | Design/evaluation only; no provider implementation in this track |
 | Caprine-style same-version asset without `SHA256SUMS` | **Exercised** (Kubuntu current `2.61.0`; lab digest-only download) | Unsigned digests are not publisher authentication |
-| Homepage fragment / non-repository marketing URL | **Exercised** (Caprine `#readme`; `gh` → `cli.github.com`) | Prefer documenting before changing matcher behavior |
+| Homepage fragment / non-repository marketing URL | **Exercised**; `#readme` fragment stripping covered by unit tests; `gh` → `cli.github.com` remains non-direct | Query strings and marketing sites still unsupported; no auto-confirm |
 
 For each new live case, record the observation date, package and architecture,
 command results, and what was and was not verified. Use temporary Beacon state

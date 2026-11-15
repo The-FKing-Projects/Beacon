@@ -24,9 +24,13 @@ class SuggestionsTest(unittest.TestCase):
         cases = {
             "https://github.com/Owner/Project": "Owner/Project",
             "https://github.com/Owner/Project/": "Owner/Project",
+            "https://github.com/sindresorhus/caprine#readme": "sindresorhus/caprine",
+            "https://github.com/Owner/Project/#readme": "Owner/Project",
+            "https://github.com/Owner/Project#section": "Owner/Project",
             "https://github.com.evil.example/Owner/Project": None,
             "https://github.com/Owner/Project/releases": None,
             "https://github.com/Owner/Project?query=1": None,
+            "https://github.com/Owner/Project?query=1#readme": None,
             "http://github.com/Owner/Project": None,
             "https://[bad": None,
         }
@@ -102,6 +106,39 @@ class SuggestionsTest(unittest.TestCase):
         self.assertIn(
             "exact package-name match points to a different repository",
             result,
+        )
+        self.assertIn("Nothing was saved.", result)
+
+    def test_caprine_readme_fragment_still_ranks_direct_homepage(self):
+        """Kubuntu Caprine-style homepage ends with #readme; fragment is ignored."""
+        direct = repo("sindresorhus/caprine", 42411516, description="Elegant Facebook Messenger desktop app")
+        search = {
+            "items": [repo("example/caprine", 2), direct],
+            "total_count": 2,
+            "incomplete_results": False,
+        }
+        homepage = "https://github.com/sindresorhus/caprine#readme"
+        out = io.StringIO()
+        with patch("tracking.installed_package",
+                   return_value=("caprine", "amd64", "2.61.0")), \
+             patch("suggestions.package_homepage", return_value=homepage), \
+             patch("tracking.github_get", side_effect=[direct, search]), \
+             patch("tracking.open_database", side_effect=AssertionError("must not open store")), \
+             contextlib.redirect_stdout(out):
+            suggestions.suggest("caprine")
+
+        result = out.getvalue()
+        self.assertEqual(
+            suggestions.homepage_repository(homepage),
+            "sindresorhus/caprine",
+        )
+        self.assertIn(f"Package homepage: {homepage}", result)
+        self.assertNotIn("Homepage is not a direct HTTPS GitHub repository URL.", result)
+        self.assertIn("Match: Very high:", result)
+        self.assertIn("installed package homepage", result)
+        self.assertLess(
+            result.index("https://github.com/sindresorhus/caprine\n"),
+            result.index("https://github.com/example/caprine\n"),
         )
         self.assertIn("Nothing was saved.", result)
 

@@ -183,9 +183,10 @@ true/false-match set. Search is currently limited to package-name results and
 does not yet use display names, package descriptions, maintainer
 relationships, README search, or aliases. A search-only candidate is not
 treated as a match. The direct-homepage tier requires an exact HTTPS GitHub
-repository URL; fragments such as `#readme` or a marketing site that is not
-`github.com/<owner>/<repo>` prevent that tier even when a human can recognize
-the upstream.
+repository URL for `github.com/<owner>/<repo>` (with an optional trailing
+slash). URL fragments such as `#readme` are ignored for matching; query
+strings are not accepted. A marketing site that is not that GitHub repository
+shape still does not receive the direct-homepage tier.
 
 ## References
 
