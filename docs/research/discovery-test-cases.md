@@ -418,7 +418,7 @@ recorded for breadth):
 | --- | --- | --- |
 | [`rclone/rclone`](https://github.com/rclone/rclone/releases/tag/v1.76.0) | `v1.76.0` | `rclone-v1.76.0-linux-amd64.deb` already **likely**; release ships `SHA256SUMS` (plus MD5/SHA1). `linux-386` stays unrecognized (no `386` arch alias — prefer false negative) |
 | [`topgrade-rs/topgrade`](https://github.com/topgrade-rs/topgrade/releases/tag/v17.16.0) | `v17.16.0` | `topgrade_17.16.0_amd64.deb` **likely** for package `topgrade`; Kubuntu operator package `stopgrade` remains a distinct identity (filename does not fold to `stopgrade`) |
-| [`BurntSushi/ripgrep`](https://github.com/BurntSushi/ripgrep/releases/tag/15.2.0) | `15.2.0` | `ripgrep_15.2.0-1_amd64.deb` → internal `ripgrep` / `15.2.0-1` / `amd64`; per-asset `.sha256` files, not a shared `SHA256SUMS` |
+| [`BurntSushi/ripgrep`](https://github.com/BurntSushi/ripgrep/releases/tag/15.2.0) | `15.2.0` | `ripgrep_15.2.0-1_amd64.deb` → internal `ripgrep` / `15.2.0-1` / `amd64`; per-asset `.sha256` files, not a shared `SHA256SUMS` (formats beyond `SHA256SUMS` stay deferred — see [checksum formats](../design/checksum-formats.md); API digest still applies) |
 | [`ajeetdsouza/zoxide`](https://github.com/ajeetdsouza/zoxide/releases/tag/v0.10.0) | `v0.10.0` | Classic `name_ver-rev_arch.deb`; comparable with numeric revision |
 
 Correct limitations reinforced by this survey (still **not** authorized work):
@@ -429,6 +429,9 @@ Correct limitations reinforced by this survey (still **not** authorized work):
 - Do **not** add `--suggest` packaging aliases beyond the frozen v1.3.0 set
   (including `gh`→`cli`) without a new dated case — see
   [documented packaging aliases](../design/suggest-package-aliases.md).
+- Do **not** accept per-asset `.sha256`, `*_checksums.txt`, or other checksum
+  names beyond exact `SHA256SUMS` — see
+  [checksum formats](../design/checksum-formats.md).
 - Exact asset selection, integrity≠authenticity, and APT ownership gates unchanged.
 
 Observed download digests (integrity only; not publisher authentication):

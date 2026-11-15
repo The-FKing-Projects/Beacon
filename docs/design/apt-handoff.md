@@ -33,6 +33,9 @@ against a malicious administrator or promise universal rollback.
   The manifest and the asset can both be replaced by an attacker with access
   to the release. Report absent, malformed, ambiguous, and mismatched entries
   distinctly; do not describe an unsigned match as a verified publisher.
+  Other checksum asset names (per-asset `.sha256`, `*_checksums.txt`,
+  `MD5SUMS` / `SHA1SUMS`, …) stay out of scope until a later unlock — see
+  [checksum formats](checksum-formats.md).
 - When GitHub supplies an asset's API `sha256` digest, compare downloaded
   bytes against it and retain/revalidate that value through preparation and
   installation. If an exact `SHA256SUMS` entry also exists, require both

@@ -250,7 +250,8 @@ Beacon also checks the downloaded bytes against it; if both sources are
 available, both must match. A GitHub API digest is GitHub-generated integrity
 metadata, not publisher authentication. A malformed digest or mismatch stops
 inspection. Only a file named `SHA256SUMS` with a supported exact-filename
-entry is checked; other checksum formats are not. The command does not check
+entry is checked; other checksum formats are not (decision deferred — see
+[checksum formats](docs/design/checksum-formats.md)). The command does not check
 dependencies or execute package maintainer scripts, and never installs a
 package.
 
