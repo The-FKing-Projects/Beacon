@@ -231,7 +231,7 @@ jobs:
           package="../beacon_$(dpkg-parsechangelog -SVersion)_all.deb"
           gh release upload "$TAG" "$package" --clobber
 
-      - name: Publish the draft release or dispatch APT publication
+      - name: Publish the draft release and dispatch APT publication
         if: >-
           github.repository == 'The-FKing-Projects/Beacon' &&
           steps.plan.outputs.release == 'true'
@@ -243,10 +243,14 @@ jobs:
           set -euo pipefail
           is_draft="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)"
           if [ "$is_draft" = "true" ]; then
-            # Undrafting emits release.published with the .deb already attached.
+            # Undraft after the .deb is attached. Events raised with GITHUB_TOKEN
+            # do not start other workflows (except workflow_dispatch /
+            # repository_dispatch), so release.published alone cannot chain aptly.
             gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
-          elif [ "${APTLY_PUBLISH_ENABLED:-}" = "true" ]; then
-            # Rerun / existing published release: published will not fire again.
+          fi
+          if [ "${APTLY_PUBLISH_ENABLED:-}" = "true" ]; then
+            # Explicit dispatch works with GITHUB_TOKEN. Keep release.published
+            # on publish-aptly.yml for human UI publishes that use a user token.
             gh workflow run publish-aptly.yml --repo "$GITHUB_REPOSITORY" \
               --ref main -f "tag=$TAG"
           fi

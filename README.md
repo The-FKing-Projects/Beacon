@@ -352,10 +352,12 @@ automated release. To add or refresh the package for an existing release, run
 the **Publish Debian package** workflow with that release's tag.
 
 Releases can also be published to the project's self-hosted, GPG-signed aptly
-repository. When `APTLY_PUBLISH_ENABLED` is `true`, **Publish to aptly** runs
-automatically on `release` `published` (after the Release workflow undrafts a
-release that already has its `.deb`) and can still be started manually with
-`workflow_dispatch` from `main`. See
+repository. When `APTLY_PUBLISH_ENABLED` is `true`, the **Release** workflow
+dispatches **Publish to aptly** after uploading the `.deb` and undrafting the
+release (`workflow_dispatch` works with `GITHUB_TOKEN`; a
+`GITHUB_TOKEN`-raised `release.published` event does not start other
+workflows). Manual `workflow_dispatch` from `main` remains available, and
+`release.published` still covers human UI publishes. See
 [APT publishing setup](docs/research/release-automation.md#self-hosted-apt-publishing)
 for runner requirements, enablement, and retry instructions. This is maintainer
 documentation, not client-side APT source setup.

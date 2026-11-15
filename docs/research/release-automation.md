@@ -74,14 +74,17 @@ merged pull request targeting `main`, and it skips non-release title types.
 repository Actions variable `APTLY_PUBLISH_ENABLED` is exactly `true`. It
 accepts:
 
-1. **`release` → `published`** for a non-draft, non-prerelease GitHub Release
-   (TAG = `github.event.release.tag_name`). The **Release** workflow creates
-   the GitHub Release as a **draft**, uploads `beacon_<version>-1_all.deb`,
-   then undrafts so this event fires with the asset already attached.
-2. **`workflow_dispatch` from `main`** with an explicit `tag` input (manual
-   retry / republish). **Publish Debian package** still dispatches this path
-   after attaching a `.deb` to an already-published release (undraft does not
-   re-fire `published`).
+1. **`workflow_dispatch` from `main`** with an explicit `tag` input. The
+   **Release** workflow creates the GitHub Release as a **draft**, uploads
+   `beacon_<version>-1_all.deb`, undrafts, then **always** dispatches this
+   path when aptly is enabled. `GITHUB_TOKEN`-originated `release.published`
+   events do **not** start other workflows (GitHub anti-recursion); explicit
+   `workflow_dispatch` is the supported chain. **Publish Debian package** also
+   dispatches after attaching a `.deb` to an existing release.
+2. **`release` → `published`** for a non-draft, non-prerelease GitHub Release
+   (TAG = `github.event.release.tag_name`) when a **human / user-token** publish
+   creates the event (for example publishing from the GitHub UI). Automated
+   Release runs must not rely on this alone.
 
 GitHub publication remains available when the enablement variable is unset or
 `false`. A failed aptly job does not roll back the GitHub Release. Fork copies
