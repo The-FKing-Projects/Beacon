@@ -8,8 +8,10 @@ import tracking
 
 # Documented Debian/Ubuntu package → GitHub repository-name aliases from the
 # 2026-11-15 discovery survey (docs/research/discovery-test-cases.md). Used only
-# for extra name-search queries and low-tier evidence. Prefer false negatives:
-# do not invent associations beyond these labeled cases. Never auto-track.
+# for extra name-search queries and low-tier evidence. Frozen at the v1.3.0 set
+# (2026-11-15): do not add entries (e.g. gh→cli) without a new dated discovery
+# case, low-tier-only wiring, and offline tests — see
+# docs/design/suggest-package-aliases.md. Prefer false negatives; never auto-track.
 DOCUMENTED_PACKAGE_ALIASES = {
     "git-delta": ("delta",),
     "du-dust": ("dust",),

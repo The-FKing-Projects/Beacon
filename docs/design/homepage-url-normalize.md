@@ -97,5 +97,7 @@ accepted.
 
 README / discovery backlog “Homepage URL normalization” stays **Done for
 fragments only**; further query/path normalize is **decision-deferred**
-(docs), not authorized product work. Expanding `--suggest` aliases, display
-names, or calibrated scores remains separate.
+(docs), not authorized product work. Expanding `--suggest` aliases is a
+separate freeze (see
+[documented packaging aliases](suggest-package-aliases.md)); display names
+and calibrated scores remain deferred.

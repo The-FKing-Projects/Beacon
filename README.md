@@ -174,10 +174,11 @@ does not determine that relationship for you. `--suggest` checks an exact
 GitHub repository homepage when present (URL fragments such as `#readme` are
 ignored for matching; query strings are not) and searches the first page of
 GitHub repository names. For a few survey-documented packaging aliases
-(`git-delta`/`delta`, `du-dust`/`dust`, `fd-find`/`fd`) it also searches the
-alias name and ranks those hits as similar-name evidence only. Each candidate
-is labeled as a direct homepage match, exact name match, similar name, or
-search-only result. If multiple repositories tie for the strongest nonzero
+(`git-delta`/`delta`, `du-dust`/`dust`, `fd-find`/`fd`; frozen at the v1.3.0
+set — see [documented packaging aliases](docs/design/suggest-package-aliases.md))
+it also searches the alias name and ranks those hits as similar-name evidence
+only. Each candidate is labeled as a direct homepage match, exact name match,
+similar name, or search-only result. If multiple repositories tie for the strongest nonzero
 evidence, Beacon warns that no single upstream is identified. If an exact
 package-name match conflicts with the package homepage, Beacon flags that
 disagreement. It presents evidence, fork and archive status, and alternatives
@@ -415,13 +416,14 @@ for further qualification; they are not claims of new product scope.
 2. **Better upstream suggestions.** **Partial.** `--suggest` prefers a direct
    GitHub homepage, warns when an exact-name candidate conflicts with that
    homepage, surfaces ties and alternatives, and never saves an association
-   without confirmation. Survey-documented packaging aliases
+   without confirmation.    Survey-documented packaging aliases
    (`git-delta`→`delta`, `du-dust`→`dust`, `fd-find`→`fd`) get an extra
-   name-search query and low-tier evidence only; hyphen-token similarity is
-   likewise low-tier and prefers false negatives. Display names, descriptions,
-   README search, broad undocumented aliases, and calibrated match scores stay
-   deferred. Filename and name similarity remain hints, not proof of
-   provenance.
+   name-search query and low-tier evidence only; that table is frozen at the
+   v1.3.0 set ([documented packaging aliases](docs/design/suggest-package-aliases.md)).
+   Hyphen-token similarity is likewise low-tier and prefers false negatives.
+   Display names, descriptions, README search, broad undocumented aliases, and
+   calibrated match scores stay deferred. Filename and name similarity remain
+   hints, not proof of provenance.
 3. **Reliable update comparisons.** **Partial.** Release-tag comparison
    supports three-component numeric versions with an optional `v` prefix, a
    numeric Debian revision on the installed side, and ignoring installed
