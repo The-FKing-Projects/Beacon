@@ -195,7 +195,10 @@ requires an exact HTTPS GitHub repository URL for
 `github.com/<owner>/<repo>` (with an optional trailing slash). URL fragments
 such as `#readme` are ignored for matching; query strings are not accepted.
 A marketing site that is not that GitHub repository shape still does not
-receive the direct-homepage tier.
+receive the direct-homepage tier. Further normalize (query-string stripping
+and treating `…/releases` or similar subpages as the repo root) is
+**decision-deferred** until a dated installed-package case exists; see
+[homepage URL normalize](../design/homepage-url-normalize.md).
 
 ## References
 
