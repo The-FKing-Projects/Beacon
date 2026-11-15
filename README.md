@@ -417,7 +417,7 @@ for further qualification; they are not claims of new product scope.
 2. **Better upstream suggestions.** **Partial.** `--suggest` prefers a direct
    GitHub homepage, warns when an exact-name candidate conflicts with that
    homepage, surfaces ties and alternatives, and never saves an association
-   without confirmation.    Survey-documented packaging aliases
+   without confirmation. Survey-documented packaging aliases
    (`git-delta`→`delta`, `du-dust`→`dust`, `fd-find`→`fd`) get an extra
    name-search query and low-tier evidence only; that table is frozen at the
    v1.3.0 set ([documented packaging aliases](docs/design/suggest-package-aliases.md)).
@@ -460,3 +460,7 @@ Beacon's explicit review and approval gates. It is not needed to reimplement
 Flatpak, Snap, or repository updates. Direct Nala support and a GUI remain
 deferred. This roadmap does not add unattended installation or broaden the
 declared platform support.
+
+## License
+
+Beacon is released under the [MIT License](LICENSE).
