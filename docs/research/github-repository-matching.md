@@ -174,13 +174,15 @@ and labels evidence without saving or approving an association:
 | Candidate only | Search returned the repository, but no independent identity signal matched |
 
 When multiple repositories tie for the strongest nonzero tier, `--suggest`
-warns that no single upstream is identified. Fork and archive flags are
-displayed as repository status, not as identity evidence. These labels
-intentionally are not numeric probabilities; a calibrated score is deferred
-until there is a labeled true/false-match set. Search is currently limited to
-package-name results and does not yet use display names, package descriptions,
-maintainer relationships, README search, or aliases. A search-only candidate
-is not treated as a match.
+warns that no single upstream is identified. When an exact package-name
+candidate conflicts with a direct homepage repository, it warns that both
+must be reviewed. Fork and archive flags are displayed as repository status,
+not as identity evidence. These labels intentionally are not numeric
+probabilities; a calibrated score is deferred until there is a labeled
+true/false-match set. Search is currently limited to package-name results and
+does not yet use display names, package descriptions, maintainer
+relationships, README search, or aliases. A search-only candidate is not
+treated as a match.
 
 ## References
 
