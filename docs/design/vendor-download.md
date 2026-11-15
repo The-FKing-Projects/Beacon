@@ -31,7 +31,7 @@ language (digest ≠ publisher authenticity). Against that bar:
 
 | Observed case | Identity | Discovery | Integrity / authenticity | Gate outcome |
 | --- | --- | --- | --- | --- |
-| `discord-ptb` | Package name and `discord.com` homepage are **not** a confirmed publisher + pinned origin allowlist | No documented machine-readable version/asset listing suitable for a first provider; unbounded HTML scrape is a non-goal | At best same-origin checksums (integrity only); no independently pinned key story in evidence | Correct negative — keep refusing a GitHub invent and do **not** add a vendor path |
+| `discord-ptb` | Package name and `discord.com` homepage are **not** a confirmed publisher + pinned origin allowlist | No documented machine-readable version/asset listing suitable for a first provider; unbounded HTML scrape is a non-goal | At best same-origin checksums (integrity only); no independently pinned key story in evidence | Correct negative — Beacon must not invent a GitHub updater path, and must **not** add a vendor path |
 | Steam-style (`steam-installer` / Steam site) | Homepage points at Valve/Steam, not a GitHub Releases `.deb` | Often overlaps **vendor APT repository** territory (`repo.steampowered.com`); when that source is configured, APT ownership already blocks Beacon takeover | Same integrity≠authenticity rules as GitHub; does not create a standalone vendor-download need | Prefer APT/PPA path when present; do not invent a parallel download provider for APT-managed packages |
 
 Additional Discord-specific risks that would remain even after a draft identity
