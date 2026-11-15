@@ -70,20 +70,24 @@ merged pull request targeting `main`, and it skips non-release title types.
 
 ## Self-hosted APT publishing
 
-After uploading a `.deb` to GitHub Releases, both **Release** and **Publish
-Debian package** dispatch **Publish to aptly** when the repository Actions variable
-`APTLY_PUBLISH_ENABLED` is exactly `true`. GitHub publication remains available
-when this variable is unset or `false`. A dispatch failure fails the originating
-workflow; publication runs separately and its success or failure appears under
-**Publish to aptly**. Neither failure rolls back the GitHub Release.
+**Publish to aptly** runs on the self-hosted `fkingprojects` runner when the
+repository Actions variable `APTLY_PUBLISH_ENABLED` is exactly `true`. It
+accepts:
 
-The server workflow accepts only `workflow_dispatch`, only from `main`, and
-only in `The-FKing-Projects/Beacon`. There is no `workflow_call`,
-`pull_request`, `pull_request_target`, `issue_comment`, or push trigger on that
-workflow. Fork copies are rejected by the repository guard. GitHub-hosted
-release jobs dispatch it after the asset is ready, including for automatic
-releases originating from a main-branch push. The server job's event is always
-`workflow_dispatch`; arbitrary pushes cannot invoke it directly.
+1. **`release` → `published`** for a non-draft, non-prerelease GitHub Release
+   (TAG = `github.event.release.tag_name`). The **Release** workflow creates
+   the GitHub Release as a **draft**, uploads `beacon_<version>-1_all.deb`,
+   then undrafts so this event fires with the asset already attached.
+2. **`workflow_dispatch` from `main`** with an explicit `tag` input (manual
+   retry / republish). **Publish Debian package** still dispatches this path
+   after attaching a `.deb` to an already-published release (undraft does not
+   re-fire `published`).
+
+GitHub publication remains available when the enablement variable is unset or
+`false`. A failed aptly job does not roll back the GitHub Release. Fork copies
+are rejected by the repository guard. There is no `workflow_call`,
+`pull_request`, `pull_request_target`, `issue_comment`, or push trigger on the
+aptly workflow. Arbitrary pushes cannot invoke it.
 
 The aptly job downloads the exact release asset
 `beacon_<version>-1_all.deb`, checks its package name, version, and architecture
@@ -132,8 +136,10 @@ workflow code with its account's privileges, including access to the signing
 key. Never route untrusted pull request jobs to this runner; restrict runner
 group access to trusted workflows where your GitHub plan supports it, protect
 `main` and workflow changes, and use an isolated host/account where practical.
-The publishing job itself does not check out or execute release-tag code and
-only runs from `main`, but these safeguards do not replace runner isolation.
+The publishing job itself does not check out or execute release-tag code.
+Manual dispatch is limited to `main`; automatic runs use the `release`
+`published` event for a verified tag. These safeguards do not replace runner
+isolation.
 Runner labels are routing, not an access-control boundary: only trusted release
 publication workflows may target this runner, including in other organization
 repositories, and runner groups should enforce that restriction where

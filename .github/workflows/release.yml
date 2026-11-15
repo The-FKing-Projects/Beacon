@@ -183,7 +183,10 @@ jobs:
             exit 0
           fi
 
+          # Create as draft so Publish to aptly's release.published trigger
+          # runs only after the .deb is uploaded and the release is undrafted.
           gh release create "$TAG" \
+            --draft \
             --title "Beacon $TAG" \
             --notes "Release for $RELEASE_REFERENCE: $PR_TITLE"
 
@@ -228,14 +231,22 @@ jobs:
           package="../beacon_$(dpkg-parsechangelog -SVersion)_all.deb"
           gh release upload "$TAG" "$package" --clobber
 
-      - name: Dispatch APT publication after the release asset is ready
+      - name: Publish the draft release or dispatch APT publication
         if: >-
           github.repository == 'The-FKing-Projects/Beacon' &&
-          steps.plan.outputs.release == 'true' &&
-          vars.APTLY_PUBLISH_ENABLED == 'true'
+          steps.plan.outputs.release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.plan.outputs.tag }}
+          APTLY_PUBLISH_ENABLED: ${{ vars.APTLY_PUBLISH_ENABLED }}
         run: |
-          gh workflow run publish-aptly.yml --repo "$GITHUB_REPOSITORY" \
-            --ref main -f "tag=$TAG"
+          set -euo pipefail
+          is_draft="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)"
+          if [ "$is_draft" = "true" ]; then
+            # Undrafting emits release.published with the .deb already attached.
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+          elif [ "${APTLY_PUBLISH_ENABLED:-}" = "true" ]; then
+            # Rerun / existing published release: published will not fire again.
+            gh workflow run publish-aptly.yml --repo "$GITHUB_REPOSITORY" \
+              --ref main -f "tag=$TAG"
+          fi
