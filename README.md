@@ -41,7 +41,8 @@ been qualified.
 If you already configured this repository, keep your existing source entry
 and skip to the install/upgrade commands below instead of adding a duplicate.
 
-First, install the prerequisites and download the public signing key:
+First, install the prerequisites and download the public signing key
+(same commands in bash and fish):
 
 ```bash
 sudo apt update
@@ -64,6 +65,14 @@ it does not add the key to APT's global trusted keyring.
 ```bash
 sudo install -d -m 0755 /etc/apt/keyrings
 sudo install -m 0644 ./fkingprojects.asc /etc/apt/keyrings/fkingprojects.asc
+```
+
+Add the source entry. Bash can use a heredoc; fish rejects `<<'EOF'`, so use
+`printf` instead:
+
+bash:
+
+```bash
 sudo tee /etc/apt/sources.list.d/fkingprojects.sources >/dev/null <<'EOF'
 Types: deb
 URIs: https://repo.fkingprojects.org
@@ -74,7 +83,20 @@ Signed-By: /etc/apt/keyrings/fkingprojects.asc
 EOF
 ```
 
-Then install or upgrade Beacon:
+fish:
+
+```fish
+printf '%s\n' \
+  'Types: deb' \
+  'URIs: https://repo.fkingprojects.org' \
+  'Suites: stable' \
+  'Components: main' \
+  'Architectures: amd64' \
+  'Signed-By: /etc/apt/keyrings/fkingprojects.asc' \
+| sudo tee /etc/apt/sources.list.d/fkingprojects.sources >/dev/null
+```
+
+Then install or upgrade Beacon (same commands in bash and fish):
 
 ```bash
 sudo apt update
