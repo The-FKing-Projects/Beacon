@@ -200,13 +200,17 @@ GitHub repository names. For a few survey-documented packaging aliases
 set — see [documented packaging aliases](docs/design/suggest-package-aliases.md))
 it also searches the alias name and ranks those hits as similar-name evidence
 only. Each candidate is labeled as a direct homepage match, exact name match,
-similar name, or search-only result. If multiple repositories tie for the strongest nonzero
-evidence, Beacon warns that no single upstream is identified. If an exact
-package-name match conflicts with the package homepage, Beacon flags that
-disagreement. It presents evidence, fork and archive status, and alternatives
-without saving or approving a match. Search results may be incomplete or
-unrelated; verify the project independently. The package must be installed;
-specify `package:architecture` if more than one architecture is installed.
+similar name, or search-only result. Match tiers are discrete evidence labels,
+not calibrated probabilities. `--suggest` also prints the installed package's
+short Description and Source from `dpkg-query` for human review; those fields
+are never used as search terms or ranking evidence. If multiple repositories
+tie for the strongest nonzero evidence, Beacon warns that no single upstream is
+identified. If an exact package-name match conflicts with the package homepage,
+Beacon flags that disagreement. It presents evidence, fork and archive status,
+and alternatives without saving or approving a match. Search results may be
+incomplete or unrelated; verify the project independently. The package must be
+installed; specify `package:architecture` if more than one architecture is
+installed.
 Associations are saved per user under `$XDG_STATE_HOME/beacon/tracking.sqlite3`
 (default `~/.local/state/beacon/tracking.sqlite3`). Re-running `--track`
 requires confirmation before replacing an association.
@@ -444,9 +448,13 @@ for further qualification; they are not claims of new product scope.
    name-search query and low-tier evidence only; that table is frozen at the
    v1.3.0 set ([documented packaging aliases](docs/design/suggest-package-aliases.md)).
    Hyphen-token similarity is likewise low-tier and prefers false negatives.
-   Display names, descriptions, README search, broad undocumented aliases, and
-   calibrated match scores stay deferred. Filename and name similarity remain
-   hints, not proof of provenance.
+   Installed package Description/Source are printed for operator review only
+   and do not affect search or ranks. Remaining Partial leftovers (using
+   display names or descriptions as search/rank signals, README/`in:description`
+   search, broad undocumented aliases, and calibrated match scores) stay
+   deferred until a dated discovery case unlocks them — do not invent aliases
+   or numeric scores meanwhile. Match tiers are not calibrated probabilities.
+   Filename and name similarity remain hints, not proof of provenance.
 3. **Reliable update comparisons.** **Partial.** Release-tag comparison
    supports three-component numeric versions with an optional `v` prefix, a
    numeric Debian revision on the installed side, and ignoring installed

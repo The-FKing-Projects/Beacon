@@ -19,6 +19,15 @@ def repo(name, identifier, fork=False, archived=False, description=None):
     }
 
 
+@contextlib.contextmanager
+def suggest_local_metadata(homepage="", description="", source=""):
+    """Stub installed-package dpkg fields for --suggest tests."""
+    with patch("suggestions.package_homepage", return_value=homepage), \
+         patch("suggestions.package_description", return_value=description), \
+         patch("suggestions.package_source", return_value=source):
+        yield
+
+
 class SuggestionsTest(unittest.TestCase):
     def test_homepage_requires_exact_github_repository(self):
         cases = {
@@ -48,6 +57,56 @@ class SuggestionsTest(unittest.TestCase):
             with self.assertRaisesRegex(tracking.TrackingError, "invalid characters"):
                 suggestions.package_homepage("app", "amd64")
 
+    def test_package_description_and_source_present_empty_and_timeout(self):
+        with patch("suggestions.subprocess.run", return_value=SimpleNamespace(
+                returncode=0, stderr="", stdout="  A short Description  \n")) as query:
+            self.assertEqual(
+                suggestions.package_description("app", "amd64"),
+                "A short Description",
+            )
+        self.assertEqual(query.call_args.args[0][3], "${Description}")
+        self.assertEqual(query.call_args.kwargs["timeout"], 15)
+
+        with patch("suggestions.subprocess.run", return_value=SimpleNamespace(
+                returncode=0, stderr="", stdout="upstream-src\n")) as query:
+            self.assertEqual(suggestions.package_source("app", "amd64"), "upstream-src")
+        self.assertEqual(query.call_args.args[0][3], "${Source}")
+
+        with patch("suggestions.subprocess.run", return_value=SimpleNamespace(
+                returncode=0, stderr="", stdout="\n")):
+            self.assertEqual(suggestions.package_description("app", "amd64"), "")
+            self.assertEqual(suggestions.package_source("app", "amd64"), "")
+
+        with patch("suggestions.subprocess.run", return_value=SimpleNamespace(
+                returncode=1, stderr="missing", stdout="")):
+            with self.assertRaisesRegex(tracking.TrackingError, "Unable to read package description"):
+                suggestions.package_description("app", "amd64")
+            with self.assertRaisesRegex(tracking.TrackingError, "Unable to read package source"):
+                suggestions.package_source("app", "amd64")
+
+        with patch("suggestions.subprocess.run", return_value=SimpleNamespace(
+                returncode=0, stderr="", stdout="bad\x00desc")):
+            with self.assertRaisesRegex(tracking.TrackingError, "invalid characters"):
+                suggestions.package_description("app", "amd64")
+        with patch("suggestions.subprocess.run", return_value=SimpleNamespace(
+                returncode=0, stderr="", stdout="bad\nsource")):
+            with self.assertRaisesRegex(tracking.TrackingError, "invalid characters"):
+                suggestions.package_source("app", "amd64")
+
+        error = suggestions.subprocess.TimeoutExpired("dpkg-query", 15)
+        for reader, label in (
+            (suggestions.package_description, "description"),
+            (suggestions.package_source, "source"),
+        ):
+            with self.subTest(label=label):
+                with patch("suggestions.subprocess.run", side_effect=error) as query:
+                    with self.assertRaisesRegex(
+                        tracking.TrackingError, f"Unable to read package {label}",
+                    ) as caught:
+                        reader("app", "amd64")
+                self.assertIs(caught.exception.__cause__, error)
+                self.assertEqual(query.call_args.kwargs["timeout"], 15)
+
     def test_suggest_ranks_homepage_and_preserves_alternatives(self):
         direct = repo("Official/App", 1, description="Official project")
         search = {
@@ -57,7 +116,7 @@ class SuggestionsTest(unittest.TestCase):
         }
         out = io.StringIO()
         with patch("tracking.installed_package", return_value=("app", "amd64", "1.0.0")), \
-             patch("suggestions.package_homepage", return_value="https://github.com/Official/App"), \
+             suggest_local_metadata(homepage="https://github.com/Official/App"), \
              patch("tracking.github_get", side_effect=[direct, search]), \
              contextlib.redirect_stdout(out):
             suggestions.suggest("app")
@@ -72,6 +131,8 @@ class SuggestionsTest(unittest.TestCase):
         self.assertIn("incomplete search results", result)
         self.assertIn("first 3 of 40", result)
         self.assertIn("Nothing was saved.", result)
+        self.assertIn("Package description: (not provided)", result)
+        self.assertIn("Package source: (not provided)", result)
 
     def test_homepage_query_timeout_is_bounded_and_reported(self):
         error = suggestions.subprocess.TimeoutExpired("dpkg-query", 15)
@@ -94,8 +155,7 @@ class SuggestionsTest(unittest.TestCase):
         out = io.StringIO()
         with patch("tracking.installed_package",
                    return_value=("fd-find", "amd64", "10.3.0-2ubuntu1")), \
-             patch("suggestions.package_homepage",
-                   return_value="https://github.com/sharkdp/fd"), \
+             suggest_local_metadata(homepage="https://github.com/sharkdp/fd"), \
              patch("tracking.github_get",
                    side_effect=[direct, search_package, search_alias]), \
              patch("tracking.open_database", side_effect=AssertionError("must not open store")), \
@@ -126,7 +186,7 @@ class SuggestionsTest(unittest.TestCase):
         out = io.StringIO()
         with patch("tracking.installed_package",
                    return_value=("caprine", "amd64", "2.61.0")), \
-             patch("suggestions.package_homepage", return_value=homepage), \
+             suggest_local_metadata(homepage=homepage), \
              patch("tracking.github_get", side_effect=[direct, search]), \
              patch("tracking.open_database", side_effect=AssertionError("must not open store")), \
              contextlib.redirect_stdout(out):
@@ -221,7 +281,7 @@ class SuggestionsTest(unittest.TestCase):
         out = io.StringIO()
         with patch("tracking.installed_package",
                    return_value=("git-delta", "amd64", "0.20.1")), \
-             patch("suggestions.package_homepage", return_value=""), \
+             suggest_local_metadata(), \
              patch("tracking.github_get", side_effect=[search_package, search_alias]) as github, \
              patch("tracking.open_database", side_effect=AssertionError("must not open store")), \
              contextlib.redirect_stdout(out):
@@ -257,7 +317,7 @@ class SuggestionsTest(unittest.TestCase):
         out = io.StringIO()
         with patch("tracking.installed_package",
                    return_value=("git-delta", "amd64", "0.20.1")), \
-             patch("suggestions.package_homepage", return_value=""), \
+             suggest_local_metadata(), \
              patch("tracking.github_get", side_effect=[search_package, search_alias]), \
              contextlib.redirect_stdout(out):
             suggestions.suggest("git-delta")
@@ -278,8 +338,7 @@ class SuggestionsTest(unittest.TestCase):
         out = io.StringIO()
         with patch("tracking.installed_package",
                    return_value=("du-dust", "amd64", "1.2.7-1")), \
-             patch("suggestions.package_homepage",
-                   return_value="https://github.com/bootandy/dust"), \
+             suggest_local_metadata(homepage="https://github.com/bootandy/dust"), \
              patch("tracking.github_get",
                    side_effect=[direct, search_package, search_alias]), \
              patch("tracking.open_database", side_effect=AssertionError("must not open store")), \
@@ -305,7 +364,7 @@ class SuggestionsTest(unittest.TestCase):
         }
         out = io.StringIO()
         with patch("tracking.installed_package", return_value=("app", "amd64", "1.0.0")), \
-             patch("suggestions.package_homepage", return_value=""), \
+             suggest_local_metadata(), \
              patch("tracking.github_get", return_value=search), \
              contextlib.redirect_stdout(out):
             suggestions.suggest("app")
@@ -319,7 +378,7 @@ class SuggestionsTest(unittest.TestCase):
 
     def test_empty_and_malformed_search(self):
         with patch("tracking.installed_package", return_value=("app", "amd64", "1")), \
-             patch("suggestions.package_homepage", return_value=""):
+             suggest_local_metadata():
             out = io.StringIO()
             with patch("tracking.github_get", return_value={
                 "items": [], "total_count": 0, "incomplete_results": False,
@@ -335,17 +394,61 @@ class SuggestionsTest(unittest.TestCase):
 
     def test_search_failure_is_reported(self):
         with patch("tracking.installed_package", return_value=("app", "amd64", "1")), \
-             patch("suggestions.package_homepage", return_value=""), \
+             suggest_local_metadata(), \
              patch("tracking.github_get", side_effect=tracking.TrackingError("rate limits")):
             with self.assertRaisesRegex(tracking.TrackingError, "rate limits"):
                 suggestions.suggest("app")
+
+    def test_description_and_source_are_display_only_not_used_for_ranking(self):
+        """Installed Description/Source print for humans; ranking/search unchanged."""
+        marker_description = "UNIQUE-DISPLAY-ONLY-DESC-xyzzy"
+        marker_source = "UNIQUE-DISPLAY-ONLY-SRC-xyzzy"
+        search = {
+            "items": [repo("Publisher/app", 1), repo("Community/helper", 2)],
+            "total_count": 2,
+            "incomplete_results": False,
+        }
+        out = io.StringIO()
+        with patch("tracking.installed_package", return_value=("app", "amd64", "1.0.0")), \
+             suggest_local_metadata(
+                 description=marker_description, source=marker_source,
+             ), \
+             patch("tracking.github_get", return_value=search) as github, \
+             patch("tracking.open_database", side_effect=AssertionError("must not open store")), \
+             contextlib.redirect_stdout(out):
+            suggestions.suggest("app")
+
+        result = out.getvalue()
+        self.assertIn(f"Package description: {marker_description}", result)
+        self.assertIn(f"Package source: {marker_source}", result)
+        requests = [call.args[0] for call in github.call_args_list]
+        self.assertEqual(
+            requests,
+            ["/search/repositories?q=app%20in%3Aname&per_page=30"],
+        )
+        for request in requests:
+            self.assertNotIn(marker_description, request)
+            self.assertNotIn(marker_source, request)
+            self.assertNotIn("xyzzy", request)
+        self.assertIn("Match: High:", result)
+        self.assertIn("package and repository names match", result)
+        self.assertIn("Candidate only:", result)
+        # Markers appear only in the Package description/source lines, not evidence.
+        for line in result.splitlines():
+            if marker_description in line or marker_source in line:
+                self.assertTrue(
+                    line.startswith("Package description:")
+                    or line.startswith("Package source:"),
+                    msg=f"marker leaked into ranking output: {line!r}",
+                )
+        self.assertIn("Nothing was saved.", result)
 
     def test_cli_wires_suggestions_without_tracking(self):
         search = {"items": [repo("owner/app-tools", 1)], "total_count": 1, "incomplete_results": False}
         out = io.StringIO()
         with patch.object(sys, "argv", ["beacon.py", "--suggest", "app"]), \
              patch("tracking.installed_package", return_value=("app", "amd64", "1")), \
-             patch("suggestions.package_homepage", return_value=""), \
+             suggest_local_metadata(), \
              patch("tracking.github_get", return_value=search), \
              patch("tracking.open_database", side_effect=AssertionError("unexpected write")), \
              contextlib.redirect_stdout(out):

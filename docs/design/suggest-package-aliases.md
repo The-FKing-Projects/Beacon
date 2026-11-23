@@ -80,6 +80,11 @@ Until then, keep the v1.3.0 three-entry table frozen.
 ## Relationship to roadmap
 
 README / discovery backlog “Better upstream suggestions” remains **Partial**.
-Survey packaging aliases are **shipped and frozen** at the v1.3.0 set; display
-names, descriptions, README search, broad undocumented aliases, and calibrated
-match scores stay deferred.
+Survey packaging aliases are **shipped and frozen** at the v1.3.0 set. Printing
+installed package Description/Source in `--suggest` is display-only operator
+context and does **not** unlock search or ranking on those fields. Remaining
+Partial leftovers (display-name/description search or rank signals,
+README/`in:description` search, broad undocumented aliases, calibrated match
+scores) still need dated discovery unlocks before any code change; do not invent
+aliases or map tiers to probabilities. Match tiers stay discrete evidence labels,
+not calibrated scores. See also the README Partial bullet for item 2.

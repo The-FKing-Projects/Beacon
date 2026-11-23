@@ -27,23 +27,39 @@ def documented_aliases(package):
     return DOCUMENTED_PACKAGE_ALIASES.get(normalize_name(package), ())
 
 
-def package_homepage(name, architecture):
+def _package_field(name, architecture, field, label):
+    """Read one dpkg-query field with the same timeout/error hardening as homepage."""
     try:
         result = subprocess.run(
-            ["dpkg-query", "-W", "-f", "${Homepage}", f"{name}:{architecture}"],
+            ["dpkg-query", "-W", "-f", "${" + field + "}", f"{name}:{architecture}"],
             capture_output=True, text=True, timeout=15, check=False,
             env=tracking.command_environment(),
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
-        raise tracking.TrackingError(f"Unable to read package homepage: {exc}") from exc
+        raise tracking.TrackingError(f"Unable to read package {label}: {exc}") from exc
     if result.returncode:
         raise tracking.TrackingError(
-            f"Unable to read package homepage: {result.stderr.strip() or 'dpkg-query failed'}"
+            f"Unable to read package {label}: "
+            f"{result.stderr.strip() or 'dpkg-query failed'}"
         )
-    homepage = result.stdout.strip()
-    if any(not char.isprintable() for char in homepage):
-        raise tracking.TrackingError("Package homepage contains invalid characters.")
-    return homepage
+    value = result.stdout.strip()
+    if any(not char.isprintable() for char in value):
+        raise tracking.TrackingError(f"Package {label} contains invalid characters.")
+    return value
+
+
+def package_homepage(name, architecture):
+    return _package_field(name, architecture, "Homepage", "homepage")
+
+
+def package_description(name, architecture):
+    """Installed package short Description — display-only for --suggest."""
+    return _package_field(name, architecture, "Description", "description")
+
+
+def package_source(name, architecture):
+    """Installed package Source — display-only for --suggest."""
+    return _package_field(name, architecture, "Source", "source")
 
 
 def homepage_repository(homepage):
@@ -176,8 +192,13 @@ def suggest(package):
         total_count += count
         shown += len(items)
 
+    # Description/Source are operator context only — never search terms, evidence, or ranks.
+    description = package_description(name, architecture)
+    source = package_source(name, architecture)
     print(f"Package: {name}:{architecture}")
     print(f"Package homepage: {homepage or '(not provided)'}")
+    print(f"Package description: {description or '(not provided)'}")
+    print(f"Package source: {source or '(not provided)'}")
     if homepage and not direct:
         print("Homepage is not a direct HTTPS GitHub repository URL.")
     print("GitHub search results are suggestions, not proof of upstream identity.")
