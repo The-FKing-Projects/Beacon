@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-VERSION = "1.4.0"
+VERSION = "1.4.1"
 BEACON_MARK = "◆"
 
 import os

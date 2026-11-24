@@ -1,3 +1,9 @@
+beacon (1.4.1-1) unstable; urgency=medium
+
+  * Release for pull request #67: fix: soft-fail --suggest Description/Source display.
+
+ -- The FK'ing Projects <FiendKing04@gmail.com>  Tue, 24 Nov 2026 01:59:27 +0000
+
 beacon (1.4.0-1) unstable; urgency=medium
 
   * Release for pull request #66: feat: print installed Description/Source in --suggest.
