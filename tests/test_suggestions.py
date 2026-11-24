@@ -57,7 +57,7 @@ class SuggestionsTest(unittest.TestCase):
             with self.assertRaisesRegex(tracking.TrackingError, "invalid characters"):
                 suggestions.package_homepage("app", "amd64")
 
-    def test_package_description_and_source_present_empty_and_timeout(self):
+    def test_package_description_and_source_present_empty_and_soft_fail(self):
         with patch("suggestions.subprocess.run", return_value=SimpleNamespace(
                 returncode=0, stderr="", stdout="  A short Description  \n")) as query:
             self.assertEqual(
@@ -67,45 +67,129 @@ class SuggestionsTest(unittest.TestCase):
         self.assertEqual(query.call_args.args[0][3], "${Description}")
         self.assertEqual(query.call_args.kwargs["timeout"], 15)
 
+        # Multi-line dpkg ${Description}: short synopsis + long body (v1.4.0
+        # regression — newlines are normal, not invalid characters).
+        topgrade_description = (
+            "Keep your system up to date by detecting and applying updates\n"
+            " topgrade is a tool that detects which package managers and tools\n"
+            " you have installed, then runs the appropriate update commands.\n"
+        )
+        beacon_description = (
+            "discover software sources and track upstream releases\n"
+            " Beacon discovers where installed Debian packages come from,\n"
+            " classifies provenance, suggests GitHub upstreams for manual\n"
+            " review, and tracks confirmed release assets.\n"
+        )
+        cursor_description = "AI-powered code editor built for pair programming\n"
+        for raw, expected in (
+            (topgrade_description, "Keep your system up to date by detecting and applying updates"),
+            (beacon_description, "discover software sources and track upstream releases"),
+            (cursor_description, "AI-powered code editor built for pair programming"),
+            (
+                "It's a CLI (tool) — updates apt, pacman & more!\n longer body\n",
+                "It's a CLI (tool) — updates apt, pacman & more!",
+            ),
+        ):
+            with self.subTest(expected=expected):
+                with patch("suggestions.subprocess.run", return_value=SimpleNamespace(
+                        returncode=0, stderr="", stdout=raw)):
+                    self.assertEqual(
+                        suggestions.package_description("app", "amd64"), expected,
+                    )
+
         with patch("suggestions.subprocess.run", return_value=SimpleNamespace(
                 returncode=0, stderr="", stdout="upstream-src\n")) as query:
             self.assertEqual(suggestions.package_source("app", "amd64"), "upstream-src")
         self.assertEqual(query.call_args.args[0][3], "${Source}")
 
         with patch("suggestions.subprocess.run", return_value=SimpleNamespace(
+                returncode=0, stderr="", stdout="source-pkg (1.2.3-1)\n")):
+            self.assertEqual(
+                suggestions.package_source("app", "amd64"), "source-pkg (1.2.3-1)",
+            )
+
+        with patch("suggestions.subprocess.run", return_value=SimpleNamespace(
                 returncode=0, stderr="", stdout="\n")):
             self.assertEqual(suggestions.package_description("app", "amd64"), "")
             self.assertEqual(suggestions.package_source("app", "amd64"), "")
 
+        # Soft-fail: dpkg errors, control chars, and timeouts return None
+        # (printed as (unavailable)) instead of aborting --suggest.
         with patch("suggestions.subprocess.run", return_value=SimpleNamespace(
                 returncode=1, stderr="missing", stdout="")):
-            with self.assertRaisesRegex(tracking.TrackingError, "Unable to read package description"):
-                suggestions.package_description("app", "amd64")
-            with self.assertRaisesRegex(tracking.TrackingError, "Unable to read package source"):
-                suggestions.package_source("app", "amd64")
+            self.assertIsNone(suggestions.package_description("app", "amd64"))
+            self.assertIsNone(suggestions.package_source("app", "amd64"))
 
         with patch("suggestions.subprocess.run", return_value=SimpleNamespace(
                 returncode=0, stderr="", stdout="bad\x00desc")):
-            with self.assertRaisesRegex(tracking.TrackingError, "invalid characters"):
-                suggestions.package_description("app", "amd64")
+            self.assertIsNone(suggestions.package_description("app", "amd64"))
         with patch("suggestions.subprocess.run", return_value=SimpleNamespace(
                 returncode=0, stderr="", stdout="bad\nsource")):
-            with self.assertRaisesRegex(tracking.TrackingError, "invalid characters"):
-                suggestions.package_source("app", "amd64")
+            self.assertIsNone(suggestions.package_source("app", "amd64"))
+        with patch("suggestions.subprocess.run", return_value=SimpleNamespace(
+                returncode=0, stderr="", stdout="has\ttab")):
+            self.assertIsNone(suggestions.package_source("app", "amd64"))
 
         error = suggestions.subprocess.TimeoutExpired("dpkg-query", 15)
-        for reader, label in (
-            (suggestions.package_description, "description"),
-            (suggestions.package_source, "source"),
+        for reader in (
+            suggestions.package_description,
+            suggestions.package_source,
         ):
-            with self.subTest(label=label):
+            with self.subTest(reader=reader.__name__):
                 with patch("suggestions.subprocess.run", side_effect=error) as query:
-                    with self.assertRaisesRegex(
-                        tracking.TrackingError, f"Unable to read package {label}",
-                    ) as caught:
-                        reader("app", "amd64")
-                self.assertIs(caught.exception.__cause__, error)
+                    self.assertIsNone(reader("app", "amd64"))
                 self.assertEqual(query.call_args.kwargs["timeout"], 15)
+
+        self.assertEqual(suggestions.format_display_field(None), "(unavailable)")
+        self.assertEqual(suggestions.format_display_field(""), "(not provided)")
+        self.assertEqual(suggestions.format_display_field("ok"), "ok")
+
+    def test_suggest_continues_when_description_source_unavailable(self):
+        """Invalid/control Description/Source soft-fail; search output still prints."""
+        search = {
+            "items": [repo("Owner/app", 1)],
+            "total_count": 1,
+            "incomplete_results": False,
+        }
+        out = io.StringIO()
+        with patch("tracking.installed_package", return_value=("app", "amd64", "1.0.0")), \
+             patch("suggestions.package_homepage", return_value=""), \
+             patch("suggestions.package_description", return_value=None), \
+             patch("suggestions.package_source", return_value=None), \
+             patch("tracking.github_get", return_value=search), \
+             patch("tracking.open_database", side_effect=AssertionError("must not open store")), \
+             contextlib.redirect_stdout(out):
+            suggestions.suggest("app")
+        result = out.getvalue()
+        self.assertIn("Package description: (unavailable)", result)
+        self.assertIn("Package source: (unavailable)", result)
+        self.assertIn("https://github.com/Owner/app", result)
+        self.assertIn("Match: High:", result)
+        self.assertIn("Nothing was saved.", result)
+        self.assertNotIn("invalid characters", result)
+
+    def test_suggest_prints_realistic_short_description(self):
+        search = {
+            "items": [repo("topgrade-rs/topgrade", 1)],
+            "total_count": 1,
+            "incomplete_results": False,
+        }
+        out = io.StringIO()
+        with patch("tracking.installed_package", return_value=("topgrade", "amd64", "16.0.0")), \
+             suggest_local_metadata(
+                 description="Keep your system up to date by detecting and applying updates",
+                 source="topgrade",
+             ), \
+             patch("tracking.github_get", return_value=search), \
+             contextlib.redirect_stdout(out):
+            suggestions.suggest("topgrade")
+        result = out.getvalue()
+        self.assertIn(
+            "Package description: Keep your system up to date by detecting and applying updates",
+            result,
+        )
+        self.assertIn("Package source: topgrade", result)
+        self.assertIn("https://github.com/topgrade-rs/topgrade", result)
 
     def test_suggest_ranks_homepage_and_preserves_alternatives(self):
         direct = repo("Official/App", 1, description="Official project")

@@ -48,18 +48,59 @@ def _package_field(name, architecture, field, label):
     return value
 
 
+def _display_package_field(name, architecture, field, *, short_line=False):
+    """Read a display-only dpkg field without aborting --suggest.
+
+    Returns the field text, "" when empty/missing, or None when the query
+    fails, times out, or the value still contains control characters after
+    normal Debian short-field shaping. Callers print None as (unavailable).
+    """
+    try:
+        result = subprocess.run(
+            ["dpkg-query", "-W", "-f", "${" + field + "}", f"{name}:{architecture}"],
+            capture_output=True, text=True, timeout=15, check=False,
+            env=tracking.command_environment(),
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode:
+        return None
+    raw = result.stdout
+    # Debian short Description is the first line of ${Description}; long
+    # Description continuation lines are normal and must not fail --suggest.
+    if short_line:
+        lines = raw.splitlines()
+        value = lines[0].strip() if lines else ""
+    else:
+        value = raw.strip()
+    if any(not char.isprintable() for char in value):
+        return None
+    return value
+
+
 def package_homepage(name, architecture):
     return _package_field(name, architecture, "Homepage", "homepage")
 
 
 def package_description(name, architecture):
     """Installed package short Description — display-only for --suggest."""
-    return _package_field(name, architecture, "Description", "description")
+    return _display_package_field(
+        name, architecture, "Description", short_line=True,
+    )
 
 
 def package_source(name, architecture):
     """Installed package Source — display-only for --suggest."""
-    return _package_field(name, architecture, "Source", "source")
+    return _display_package_field(name, architecture, "Source")
+
+
+def format_display_field(value):
+    """Render a display-only package field for --suggest output."""
+    if value is None:
+        return "(unavailable)"
+    if not value:
+        return "(not provided)"
+    return value
 
 
 def homepage_repository(homepage):
@@ -193,12 +234,13 @@ def suggest(package):
         shown += len(items)
 
     # Description/Source are operator context only — never search terms, evidence, or ranks.
+    # Soft-fail display: query/validation problems must not abort --suggest.
     description = package_description(name, architecture)
     source = package_source(name, architecture)
     print(f"Package: {name}:{architecture}")
     print(f"Package homepage: {homepage or '(not provided)'}")
-    print(f"Package description: {description or '(not provided)'}")
-    print(f"Package source: {source or '(not provided)'}")
+    print(f"Package description: {format_display_field(description)}")
+    print(f"Package source: {format_display_field(source)}")
     if homepage and not direct:
         print("Homepage is not a direct HTTPS GitHub repository URL.")
     print("GitHub search results are suggestions, not proof of upstream identity.")
